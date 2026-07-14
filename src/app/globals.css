@@ -1,0 +1,213 @@
+@import "tailwindcss";
+
+/*
+ * Product Sans — the design's typeface.
+ * Drop the font files into public/fonts/ with these exact names and the
+ * site picks them up automatically (until then, DM Sans is the fallback):
+ *   public/fonts/ProductSans-Regular.woff2
+ *   public/fonts/ProductSans-Medium.woff2
+ *   public/fonts/ProductSans-Bold.woff2
+ * (.ttf also works — adjust format() below if you only have .ttf)
+ */
+@font-face {
+  font-family: "Product Sans";
+  src: url("/fonts/ProductSans-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Product Sans";
+  src: url("/fonts/ProductSans-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Product Sans";
+  src: url("/fonts/ProductSans-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@theme {
+  /* Palette sampled from the Figma exports (Home.png) */
+  --color-brand: #d4a017;
+  --color-ink: #212121;
+  --color-coal: #2d2d2d;
+  --color-cream: #fdfaf3;
+  --color-paper: #ffffff;
+  --color-navy: #1b3a6b;
+  --color-teal: #0e7490;
+  --color-gold: #d4a017;
+  --font-sans: "Product Sans", var(--font-fallback), Arial, Helvetica,
+    sans-serif;
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
+
+/* Giant outlined DANILIYA wordmark used in the footer */
+.wordmark-outline {
+  color: transparent;
+  -webkit-text-stroke: 2px rgba(212, 160, 23, 0.5);
+  letter-spacing: 0.02em;
+}
+
+/* Subtle vertical pinstripes over the dark hero */
+.pinstripes {
+  background-image: repeating-linear-gradient(
+    to right,
+    transparent 0,
+    transparent 119px,
+    rgba(255, 255, 255, 0.045) 119px,
+    rgba(255, 255, 255, 0.045) 120px
+  );
+}
+
+/* ---------------------------------------------------------------------------
+   Motion. Everything below only runs for users who haven't asked for
+   reduced motion — with reduced motion the site renders fully static.
+--------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: no-preference) {
+  /* Load-in entrance for above-the-fold hero content */
+  .fade-up {
+    opacity: 0;
+    animation: fade-up 0.9s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+  .fade-up-1 {
+    animation-delay: 0.15s;
+  }
+  .fade-up-2 {
+    animation-delay: 0.3s;
+  }
+  @keyframes fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(26px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  /* Scroll reveal (driven by the <Reveal> component) */
+  .reveal {
+    opacity: 0;
+    transform: translateY(26px);
+    transition:
+      opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+      transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .reveal-shown {
+    opacity: 1;
+    transform: none;
+  }
+
+  /* Affiliate collage orbit — parent spins, children counter-spin upright */
+  .orbit {
+    animation: spin 40s linear infinite;
+  }
+  .orbit-counter {
+    animation: spin 40s linear infinite reverse;
+  }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  /* Testimonial marquees — content is two identical halves, shift by 50% */
+  .marquee-left {
+    animation: marquee-l 38s linear infinite;
+  }
+  .marquee-right {
+    animation: marquee-r 38s linear infinite;
+  }
+  .marquee-left:hover,
+  .marquee-right:hover {
+    animation-play-state: paused;
+  }
+  @keyframes marquee-l {
+    to {
+      transform: translateX(-50%);
+    }
+  }
+  @keyframes marquee-r {
+    from {
+      transform: translateX(-50%);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
+
+  /* Gentle floating bob (shop hero book) */
+  .float-slow {
+    animation: float-slow 5.5s ease-in-out infinite alternate;
+  }
+  @keyframes float-slow {
+    to {
+      transform: translateY(-12px);
+    }
+  }
+
+  /* Ambient background effects */
+  .ambient-rise {
+    animation: ambient-rise linear infinite;
+  }
+  .ambient-fall {
+    animation: ambient-fall linear infinite;
+  }
+  .ambient-drift {
+    animation: ambient-drift ease-in-out infinite alternate;
+  }
+  .ambient-pan {
+    animation: ambient-pan 70s linear infinite;
+  }
+  @keyframes ambient-rise {
+    0% {
+      transform: translateY(108vh) translateX(0) rotate(0deg);
+    }
+    50% {
+      transform: translateY(50vh) translateX(26px) rotate(8deg);
+    }
+    100% {
+      transform: translateY(-12vh) translateX(-14px) rotate(-6deg);
+    }
+  }
+  @keyframes ambient-fall {
+    0% {
+      transform: translateY(-12vh) translateX(0) rotate(0deg);
+    }
+    100% {
+      transform: translateY(108vh) translateX(30px) rotate(180deg);
+    }
+  }
+  @keyframes ambient-drift {
+    from {
+      transform: translate(0, 0) rotate(-6deg);
+    }
+    to {
+      transform: translate(26px, -30px) rotate(8deg);
+    }
+  }
+  @keyframes ambient-pan {
+    to {
+      background-position: 480px 480px;
+    }
+  }
+}
+
+/* With reduced motion, ambient layers disappear entirely (they are
+   decoration only) and reveals/marquees render in their final state. */
+@media (prefers-reduced-motion: reduce) {
+  .ambient-layer {
+    display: none;
+  }
+}
