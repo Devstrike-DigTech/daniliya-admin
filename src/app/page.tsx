@@ -1,13 +1,13 @@
 import Link from "next/link";
 import Icon from "@/components/Icon";
 import { Card, StatTile, StatusBadge } from "@/components/widgets";
+import { apiFetchSafe } from "@/lib/api";
 import {
-  overviewStats,
+  // NOTE: still dummy — no API endpoint yet for the weekly revenue series,
+  // the attention feed, or the queued-payout strip. See README "Not yet wired".
   weeklyRevenue,
-  orderAttribution,
   attentionItems,
   payoutBatches,
-  adminOrders,
 } from "@/lib/dashboard";
 
 const toneDot: Record<string, string> = {
@@ -16,7 +16,54 @@ const toneDot: Record<string, string> = {
   red: "bg-red-500",
 };
 
-export default function CommandCentre() {
+const naira = (v: string | number) =>
+  `₦${Number(v).toLocaleString("en-NG", { maximumFractionDigits: 0 })}`;
+
+type Overview = {
+  gmv: string;
+  orders: number;
+  users: number;
+  pendingPayouts: string;
+  attribution: { channel: string; orders: number }[];
+};
+
+type OrderRow = {
+  ref: string;
+  customer?: string;
+  channel: string;
+  total: string;
+  status: string;
+  createdAt: string;
+};
+
+const CHANNEL_COLOR: Record<string, string> = {
+  AFFILIATE: "bg-brand",
+  INFLUENCER: "bg-[#6d3fa0]",
+  WEB: "bg-blue-500",
+};
+
+export default async function CommandCentre() {
+  const [overview, orders] = await Promise.all([
+    apiFetchSafe<Overview>("/admin/overview"),
+    apiFetchSafe<OrderRow[]>("/admin/orders"),
+  ]);
+
+  const stats = [
+    { label: "GMV", value: overview ? naira(overview.gmv) : "—", icon: "trending-up", accent: "bg-brand", soft: "bg-brand text-white" },
+    { label: "Orders", value: overview ? String(overview.orders) : "—", icon: "receipt", accent: "bg-green-500", soft: "bg-green-500 text-white" },
+    { label: "Total users", value: overview ? String(overview.users) : "—", icon: "users", accent: "bg-blue-500", soft: "bg-blue-500 text-white" },
+    { label: "Pending payouts", value: overview ? naira(overview.pendingPayouts) : "—", icon: "wallet", accent: "bg-[#6d3fa0]", soft: "bg-[#6d3fa0] text-white" },
+  ];
+
+  const totalAttributed = overview?.attribution.reduce((n, a) => n + a.orders, 0) ?? 0;
+  const orderAttribution = (overview?.attribution ?? []).map((a) => ({
+    label: a.channel.charAt(0) + a.channel.slice(1).toLowerCase(),
+    pct: totalAttributed ? Math.round((a.orders / totalAttributed) * 100) : 0,
+    color: CHANNEL_COLOR[a.channel] ?? "bg-ink/30",
+  }));
+
+  const recentOrders = (orders ?? []).slice(0, 5);
+
   const peak = Math.max(...weeklyRevenue.map((d) => d.value));
   const gridLines = [0, 0.25, 0.5, 0.75, 1];
 
@@ -44,7 +91,7 @@ export default function CommandCentre() {
 
       {/* Stat cards */}
       <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {overviewStats.map((s) => (
+        {stats.map((s) => (
           <StatTile key={s.label} {...s} accentBottom />
         ))}
       </div>
@@ -201,25 +248,32 @@ export default function CommandCentre() {
               <tr className="border-y border-ink/10 bg-ink/[0.03] text-xs uppercase tracking-wide text-ink/45">
                 <th className="px-6 py-3 font-bold">Order</th>
                 <th className="px-6 py-3 font-bold">Customer</th>
-                <th className="px-6 py-3 font-bold">Vendor</th>
-                <th className="px-6 py-3 font-bold">Commission</th>
+                <th className="px-6 py-3 font-bold">Channel</th>
+                <th className="px-6 py-3 font-bold">Total</th>
                 <th className="px-6 py-3 font-bold">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-ink/8">
-              {adminOrders.map((o) => (
+              {recentOrders.map((o) => (
                 <tr key={o.ref} className="transition-colors hover:bg-ink/[0.02]">
                   <td className="px-6 py-3.5">
                     <Link href={`/orders/${o.ref}`} className="font-mono text-xs font-bold text-brand hover:underline">
                       {o.ref}
                     </Link>
                   </td>
-                  <td className="px-6 py-3.5 font-bold">{o.customer}</td>
-                  <td className="px-6 py-3.5 text-ink/70">{o.vendor}</td>
-                  <td className="px-6 py-3.5 font-bold">{o.total}</td>
+                  <td className="px-6 py-3.5 font-bold">{o.customer ?? "—"}</td>
+                  <td className="px-6 py-3.5 text-ink/70">{o.channel}</td>
+                  <td className="px-6 py-3.5 font-bold">{naira(o.total)}</td>
                   <td className="px-6 py-3.5"><StatusBadge status={o.status} /></td>
                 </tr>
               ))}
+              {recentOrders.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-6 py-10 text-center text-sm text-ink/45">
+                    No orders yet.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

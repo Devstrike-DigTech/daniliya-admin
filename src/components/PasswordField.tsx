@@ -6,11 +6,14 @@ import Icon from "@/components/Icon";
 /** Password input with an animated show/hide toggle. */
 export default function PasswordField({
   placeholder = "Password",
+  name,
   value,
   onChange,
   required,
 }: {
   placeholder?: string;
+  /** Needed when the field is read via FormData rather than controlled state. */
+  name?: string;
   value?: string;
   onChange?: (v: string) => void;
   required?: boolean;
@@ -21,6 +24,7 @@ export default function PasswordField({
     <div className="relative">
       <input
         type={show ? "text" : "password"}
+        name={name}
         value={value}
         onChange={onChange ? (e) => onChange(e.target.value) : undefined}
         placeholder={placeholder}
