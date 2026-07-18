@@ -1,11 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { adminProducts } from "@/lib/dashboard";
-import ProductDetail from "./ProductDetail";
-
-export function generateStaticParams() {
-  return adminProducts.map((p) => ({ id: p.id }));
-}
+import { apiFetchSafe } from "@/lib/api";
+import ProductDetail, { type AdminProductDetail } from "./ProductDetail";
 
 export async function generateMetadata({
   params,
@@ -13,8 +9,8 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  const p = adminProducts.find((x) => x.id === id);
-  return { title: p ? p.name : "Product" };
+  const p = await apiFetchSafe<AdminProductDetail>(`/admin/products/${id}`);
+  return { title: p ? p.title : "Product" };
 }
 
 export default async function Page({
@@ -23,7 +19,7 @@ export default async function Page({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const product = adminProducts.find((p) => p.id === id);
+  const product = await apiFetchSafe<AdminProductDetail>(`/admin/products/${id}`);
   if (!product) notFound();
   return <ProductDetail product={product} />;
 }

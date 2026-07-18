@@ -3,19 +3,37 @@
 import { useState } from "react";
 import Link from "next/link";
 import Icon from "@/components/Icon";
-import {
-  type Influencer,
-  influencerStats,
-  influencerSocial,
-  influencerCampaignRows,
-  influencerPayoutRows,
-  influencerPayoutSummary,
-  influencerContentRows,
-} from "@/lib/dashboard";
+
+/** Shape returned by GET /admin/influencers/{id}. */
+export type InfluencerDetailData = {
+  id: string;
+  userId: string;
+  influencerCode: string;
+  socialHandles: Record<string, string> | null;
+  niche: string | null;
+  followerCount: number | null;
+  contentLinks: string[];
+  isApproved: boolean;
+  approvedAt: string | null;
+  rejectedReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+  user: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone: string | null;
+    status: string;
+  };
+};
 
 const TABS = ["Overview", "Campaigns", "Payouts", "Content"] as const;
 const initials = (n: string) => n.split(" ").map((p) => p[0]).join("").slice(0, 2);
 const card = "rounded-2xl border border-ink/10 bg-white p-6";
+const EMPTY = "—";
+const fmtDate = (iso: string | null) =>
+  iso ? new Date(iso).toLocaleDateString("en-NG", { year: "numeric", month: "short", day: "numeric" }) : EMPTY;
 
 const statusChip: Record<string, string> = {
   Approved: "bg-green-500/20 text-green-300",
@@ -23,10 +41,14 @@ const statusChip: Record<string, string> = {
   Rejected: "bg-red-500/20 text-red-300",
 };
 
-export default function InfluencerDetail({ influencer: i }: { influencer: Influencer }) {
+export default function InfluencerDetail({ influencer: i }: { influencer: InfluencerDetailData }) {
   const [tab, setTab] = useState<(typeof TABS)[number]>("Overview");
-  const s = influencerStats(i);
-  const suspended = i.status === "Rejected";
+  const name = `${i.user.firstName} ${i.user.lastName}`;
+  const status = i.isApproved ? "Approved" : i.rejectedReason ? "Rejected" : "Pending";
+  const suspended = status === "Rejected" || i.user.status !== "ACTIVE";
+  const socials = Object.entries(i.socialHandles ?? {});
+  const primaryHandle = socials[0]?.[1] ?? i.influencerCode;
+  const followers = i.followerCount != null ? i.followerCount.toLocaleString("en-NG") : EMPTY;
 
   return (
     <>
@@ -36,8 +58,8 @@ export default function InfluencerDetail({ influencer: i }: { influencer: Influe
             <Icon name="arrow-left" size={20} />
           </Link>
           <div>
-            <h1 className="text-2xl font-bold sm:text-[28px]">{i.name}</h1>
-            <p className="mt-0.5 text-sm text-ink/50">{i.id} · {i.handle}</p>
+            <h1 className="text-2xl font-bold sm:text-[28px]">{name}</h1>
+            <p className="mt-0.5 text-sm text-ink/50">{i.id} · {primaryHandle}</p>
           </div>
         </div>
         <button className="inline-flex items-center gap-2 rounded-xl border border-brand px-5 py-3 text-sm font-bold text-brand transition-colors hover:bg-brand/10">
@@ -50,14 +72,16 @@ export default function InfluencerDetail({ influencer: i }: { influencer: Influe
         <div aria-hidden className="pointer-events-none absolute right-0 top-0 h-40 w-64 opacity-40 [background-image:radial-gradient(rgba(212,160,23,0.6)_1.2px,transparent_1.2px)] [background-size:12px_12px]" />
         <div className="relative flex flex-wrap items-start justify-between gap-4">
           <div className="flex items-center gap-4">
-            <span className="flex h-14 w-14 items-center justify-center rounded-xl bg-brand text-lg font-bold text-ink">{initials(i.name)}</span>
+            <span className="flex h-14 w-14 items-center justify-center rounded-xl bg-brand text-lg font-bold text-ink">{initials(name)}</span>
             <div>
-              <p className="text-lg font-bold">{i.name}</p>
-              <p className="text-sm text-white/60">{s.role} · {i.city} · Joined {i.joined}</p>
+              <p className="text-lg font-bold">{name}</p>
+              {/* No city on the influencer payload. */}
+              <p className="text-sm text-white/60">{i.niche ?? EMPTY} · Joined {fmtDate(i.createdAt)}</p>
               <div className="mt-2 flex flex-wrap items-center gap-2">
-                <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${statusChip[i.status]}`}>{i.status}</span>
-                <span className="rounded-full bg-white/10 px-2.5 py-1 text-xs font-bold">{i.followers} followers</span>
-                <span className="rounded-full bg-white/10 px-2.5 py-1 text-xs font-bold">{s.engagement} engagement</span>
+                <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${statusChip[status]}`}>{status}</span>
+                <span className="rounded-full bg-white/10 px-2.5 py-1 text-xs font-bold">{followers} followers</span>
+                {/* No engagement metric on the API. */}
+                <span className="rounded-full bg-white/10 px-2.5 py-1 text-xs font-bold">{EMPTY} engagement</span>
               </div>
             </div>
           </div>
@@ -73,12 +97,12 @@ export default function InfluencerDetail({ influencer: i }: { influencer: Influe
         </div>
       </div>
 
-      {/* Stats */}
+      {/* Stats — earnings/conversions/payouts have no field on this endpoint */}
       <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Lifetime earnings" value={s.lifetimeEarnings} />
-        <MetricCard label="Conversions" value={`${s.conversions}`} />
-        <MetricCard label="Followers across all platforms" value={s.followers} />
-        <MetricCard label="Pending payout" value={s.pendingPayout} gold />
+        <MetricCard label="Lifetime earnings" value={EMPTY} />
+        <MetricCard label="Conversions" value={EMPTY} />
+        <MetricCard label="Followers across all platforms" value={followers} />
+        <MetricCard label="Pending payout" value={EMPTY} gold />
       </div>
 
       {/* Tabs */}
@@ -93,34 +117,43 @@ export default function InfluencerDetail({ influencer: i }: { influencer: Influe
           <div className={card}>
             <p className="font-bold">Contact details</p>
             <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              <CopyField icon="mail" label="Email" value={i.email} />
-              <CopyField icon="phone" label="Phone" value={i.phone} />
-              <CopyField icon="pin" label="City" value={i.city} />
-              <CopyField icon="calendar" label="Joined" value={i.joined} />
-              <CopyField icon="bank" label="Bank" value={s.bank} />
+              <CopyField icon="mail" label="Email" value={i.user.email} />
+              <CopyField icon="phone" label="Phone" value={i.user.phone ?? EMPTY} />
+              {/* No city or bank details on the influencer payload. */}
+              <CopyField icon="pin" label="City" value={EMPTY} />
+              <CopyField icon="calendar" label="Joined" value={fmtDate(i.createdAt)} />
+              <CopyField icon="bank" label="Bank" value={EMPTY} />
             </div>
             <div className="mt-4 flex flex-wrap gap-3">
-              <a href={`https://wa.me/${i.phone.replace(/\D/g, "")}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-4 py-2 text-sm font-bold text-green-700 hover:bg-green-200">WhatsApp <Icon name="arrow-right" size={14} className="-rotate-45" /></a>
-              <a href={`mailto:${i.email}`} className="inline-flex items-center gap-1.5 rounded-full bg-[#6d3fa0]/10 px-4 py-2 text-sm font-bold text-[#6d3fa0] hover:bg-[#6d3fa0]/20">Send email <Icon name="arrow-right" size={14} className="-rotate-45" /></a>
+              {i.user.phone && (
+                <a href={`https://wa.me/${i.user.phone.replace(/\D/g, "")}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-4 py-2 text-sm font-bold text-green-700 hover:bg-green-200">WhatsApp <Icon name="arrow-right" size={14} className="-rotate-45" /></a>
+              )}
+              <a href={`mailto:${i.user.email}`} className="inline-flex items-center gap-1.5 rounded-full bg-[#6d3fa0]/10 px-4 py-2 text-sm font-bold text-[#6d3fa0] hover:bg-[#6d3fa0]/20">Send email <Icon name="arrow-right" size={14} className="-rotate-45" /></a>
             </div>
           </div>
 
           <div className="grid gap-6 lg:grid-cols-2">
             <div className={card}>
               <p className="font-bold">Social presence</p>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                {influencerSocial(i).map((soc) => (
-                  <div key={soc.platform} className="rounded-xl border border-ink/10 p-3">
-                    <p className="text-xs text-ink/45">{soc.platform} · {soc.handle}</p>
-                    <p className="mt-1 text-sm font-bold">{soc.stat}</p>
-                  </div>
-                ))}
-              </div>
+              {socials.length ? (
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  {socials.map(([platform, handle]) => (
+                    <div key={platform} className="rounded-xl border border-ink/10 p-3">
+                      <p className="text-xs text-ink/45">{platform} · {handle}</p>
+                      {/* Follower count is a single aggregate, not per-platform. */}
+                      <p className="mt-1 text-sm font-bold">{EMPTY}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-4 text-sm text-ink/45">No social handles on file.</p>
+              )}
             </div>
             <div className={card}>
               <p className="font-bold">Bank details</p>
-              <p className="mt-3 text-xl font-bold">{s.bankFull}</p>
-              <p className="mt-1 text-sm text-ink/50">{s.bankNote}</p>
+              {/* No bank fields on GET /admin/influencers/{id}. */}
+              <p className="mt-3 text-xl font-bold">{EMPTY}</p>
+              <p className="mt-1 text-sm text-ink/50">No bank details on file.</p>
             </div>
           </div>
         </div>
@@ -129,37 +162,8 @@ export default function InfluencerDetail({ influencer: i }: { influencer: Influe
       {tab === "Campaigns" && (
         <div className={`mt-6 ${card}`}>
           <p className="font-bold">Campaign performance</p>
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full min-w-[640px] text-left text-sm">
-              <thead>
-                <tr className="border-b border-ink/10 text-xs uppercase tracking-wide text-ink/45">
-                  <th className="py-3 pr-4 font-bold">Campaign</th>
-                  <th className="px-4 py-3 text-right font-bold">Posts</th>
-                  <th className="px-4 py-3 text-right font-bold">Reach</th>
-                  <th className="px-4 py-3 text-right font-bold">Conv.</th>
-                  <th className="px-4 py-3 text-right font-bold">Earnings</th>
-                  <th className="px-4 py-3 font-bold">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-ink/8">
-                {influencerCampaignRows(i).map((c) => (
-                  <tr key={c.campaign} className="hover:bg-ink/[0.02]">
-                    <td className="py-4 pr-4">
-                      <p className="font-bold">{c.campaign}</p>
-                      <p className="text-xs text-ink/50">{c.brand}</p>
-                    </td>
-                    <td className="px-4 py-4 text-right tabular-nums">{c.posts}</td>
-                    <td className="px-4 py-4 text-right tabular-nums">{c.reach}</td>
-                    <td className="px-4 py-4 text-right tabular-nums">{c.conv}</td>
-                    <td className="px-4 py-4 text-right font-bold tabular-nums">{c.earnings}</td>
-                    <td className="px-4 py-4">
-                      <span className={`inline-block rounded-full px-3 py-1 text-xs font-bold ${c.status === "Live" ? "bg-green-100 text-green-700" : "bg-ink/8 text-ink/55"}`}>{c.status}</span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          {/* No per-influencer campaign data on this endpoint. */}
+          <p className="mt-4 text-sm text-ink/45">No campaign data yet.</p>
         </div>
       )}
 
@@ -167,46 +171,16 @@ export default function InfluencerDetail({ influencer: i }: { influencer: Influe
         <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_1.6fr]">
           <div className={card}>
             <p className="font-bold">Summary</p>
-            {(() => {
-              const sum = influencerPayoutSummary(i);
-              return (
-                <div className="mt-4 space-y-3 text-sm">
-                  <SumRow label="Payouts to date" value={`${sum.toDate}`} />
-                  <SumRow label="Total paid" value={sum.totalPaid} />
-                  <SumRow label="Pending release" value={sum.pendingRelease} />
-                  <SumRow label="Last payout" value={sum.lastPayout} />
-                </div>
-              );
-            })()}
+            <div className="mt-4 space-y-3 text-sm">
+              <SumRow label="Payouts to date" value={EMPTY} />
+              <SumRow label="Total paid" value={EMPTY} />
+              <SumRow label="Pending release" value={EMPTY} />
+              <SumRow label="Last payout" value={EMPTY} />
+            </div>
           </div>
           <div className={card}>
             <p className="font-bold">Payout history</p>
-            {influencerPayoutRows(i).length ? (
-              <div className="mt-4 overflow-x-auto">
-                <table className="w-full min-w-[420px] text-left text-sm">
-                  <thead>
-                    <tr className="border-b border-ink/10 text-xs uppercase tracking-wide text-ink/45">
-                      <th className="py-2.5 pr-4 font-bold">Batch</th>
-                      <th className="px-4 py-2.5 font-bold">Date</th>
-                      <th className="px-4 py-2.5 text-right font-bold">Amount</th>
-                      <th className="px-4 py-2.5 text-right font-bold">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-ink/8">
-                    {influencerPayoutRows(i).map((p) => (
-                      <tr key={p.batch}>
-                        <td className="py-3 pr-4 font-mono text-xs">{p.batch}</td>
-                        <td className="px-4 py-3 text-ink/60">{p.date}</td>
-                        <td className="px-4 py-3 text-right font-bold tabular-nums">{p.amount}</td>
-                        <td className="px-4 py-3 text-right font-bold text-green-600">{p.status}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <p className="mt-4 text-sm text-ink/45">No payouts — this influencer isn&apos;t approved yet.</p>
-            )}
+            <p className="mt-4 text-sm text-ink/45">No payout history yet.</p>
           </div>
         </div>
       )}
@@ -214,19 +188,22 @@ export default function InfluencerDetail({ influencer: i }: { influencer: Influe
       {tab === "Content" && (
         <div className={`mt-6 ${card}`}>
           <p className="font-bold">Recent content submissions</p>
-          <div className="mt-4 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
-            {influencerContentRows(i).map((c) => (
-              <div key={c.title} className="overflow-hidden rounded-2xl border border-ink/10">
-                <div className="flex aspect-[4/3] items-center justify-center bg-ink/[0.06] text-ink/25"><Icon name="play" size={40} /></div>
-                <div className="p-4">
-                  <p className="font-bold">{c.title}</p>
-                  <p className="mt-0.5 text-xs text-ink/50">
-                    <span className="font-bold text-green-600">{c.status}</span> · {c.views}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
+          {i.contentLinks.length ? (
+            <div className="mt-4 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+              {i.contentLinks.map((link) => (
+                <a key={link} href={link} target="_blank" rel="noreferrer" className="overflow-hidden rounded-2xl border border-ink/10">
+                  <div className="flex aspect-[4/3] items-center justify-center bg-ink/[0.06] text-ink/25"><Icon name="play" size={40} /></div>
+                  <div className="p-4">
+                    <p className="truncate font-bold">{link}</p>
+                    {/* No status or view counts on contentLinks. */}
+                    <p className="mt-0.5 text-xs text-ink/50">{EMPTY}</p>
+                  </div>
+                </a>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-4 text-sm text-ink/45">No content submissions yet.</p>
+          )}
         </div>
       )}
     </>

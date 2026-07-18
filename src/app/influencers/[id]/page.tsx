@@ -1,11 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { influencers } from "@/lib/dashboard";
-import InfluencerDetail from "./InfluencerDetail";
-
-export function generateStaticParams() {
-  return influencers.map((i) => ({ id: i.id }));
-}
+import { apiFetchSafe } from "@/lib/api";
+import InfluencerDetail, { type InfluencerDetailData } from "./InfluencerDetail";
 
 export async function generateMetadata({
   params,
@@ -13,8 +9,8 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  const i = influencers.find((x) => x.id === id);
-  return { title: i ? i.name : "Influencer" };
+  const i = await apiFetchSafe<InfluencerDetailData>(`/admin/influencers/${id}`);
+  return { title: i ? `${i.user.firstName} ${i.user.lastName}` : "Influencer" };
 }
 
 export default async function Page({
@@ -23,7 +19,7 @@ export default async function Page({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const influencer = influencers.find((x) => x.id === id);
+  const influencer = await apiFetchSafe<InfluencerDetailData>(`/admin/influencers/${id}`);
   if (!influencer) notFound();
   return <InfluencerDetail influencer={influencer} />;
 }

@@ -3,11 +3,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import Icon from "@/components/Icon";
 import Countdown from "@/components/Countdown";
-import { adminPayouts, payoutRecipients, type PayoutStatus } from "@/lib/dashboard";
-
-export function generateStaticParams() {
-  return adminPayouts.map((p) => ({ ref: p.ref }));
-}
+import { apiFetchSafe } from "@/lib/api";
 
 export async function generateMetadata({
   params,
@@ -18,41 +14,63 @@ export async function generateMetadata({
   return { title: ref };
 }
 
-// ── Per-status presentation ──────────────────────────────────
-const headPill: Record<PayoutStatus, string> = {
-  Scheduled: "bg-indigo-100 text-indigo-700",
-  Review: "bg-amber-100 text-amber-700",
-  Paid: "bg-green-100 text-green-700",
-  Failed: "bg-red-100 text-red-600",
+type PayoutCheck = { label: string; passed: boolean };
+type PayoutItem = {
+  id: string;
+  beneficiary: string;
+  amount: string;
+  status: string;
+  transfer: { status: string } | null;
 };
-const headLabel: Record<PayoutStatus, string> = {
-  Scheduled: "Scheduled for Monday 9AM",
-  Review: "Awaiting review",
-  Paid: "Released",
-  Failed: "Transfer failed",
+type AdminPayoutDetail = {
+  ref: string;
+  audience: string;
+  status: string;
+  total: string;
+  scheduledDate: string;
+  checks: PayoutCheck[];
+  items: PayoutItem[];
+};
+
+const naira = (v: string | number) =>
+  `₦${Number(v).toLocaleString("en-NG", { maximumFractionDigits: 0 })}`;
+const fmtRun = (v: string) =>
+  new Date(v).toLocaleString("en-NG", { dateStyle: "medium", timeStyle: "short" });
+
+// ── Per-status presentation ──────────────────────────────────
+const headPill: Record<string, string> = {
+  SCHEDULED: "bg-indigo-100 text-indigo-700",
+  REVIEW: "bg-amber-100 text-amber-700",
+  HELD: "bg-orange-100 text-orange-700",
+  PAID: "bg-green-100 text-green-700",
+  FAILED: "bg-red-100 text-red-600",
+  CANCELLED: "bg-ink/10 text-ink/60",
+};
+const headLabel: Record<string, string> = {
+  SCHEDULED: "Scheduled",
+  REVIEW: "Awaiting review",
+  HELD: "On hold",
+  PAID: "Released",
+  FAILED: "Transfer failed",
+  CANCELLED: "Cancelled",
 };
 
 // Hero card varies by status: dark countdown (Scheduled/Review), green released (Paid), red failed (Failed).
-function heroFor(status: PayoutStatus, total: string, failCount: number) {
+function heroFor(status: string, runDate: string, failCount: number) {
   switch (status) {
-    case "Paid":
-      return { bg: "bg-green-700", label: "Released", icon: "check", timer: "", note: "Paid Mon, Jul 6 · 9:00 AM", stripe: false };
-    case "Failed":
+    case "PAID":
+      return { bg: "bg-green-700", label: "Released", icon: "check", timer: "", note: `Paid ${runDate}`, stripe: false };
+    case "FAILED":
       return { bg: "bg-red-700", label: "Transfer failed", icon: "close", timer: "", note: `${failCount} recipients failed · retry required`, stripe: false };
-    case "Review":
+    case "CANCELLED":
+      return { bg: "bg-coal", label: "Cancelled", icon: "close", timer: "", note: "This batch was cancelled", stripe: false };
+    case "HELD":
+      return { bg: "bg-coal", label: "On hold", icon: "clock", timer: "", note: `Held · was scheduled ${runDate}`, stripe: true };
+    case "REVIEW":
       return { bg: "bg-coal", label: "Pending approval", icon: "wallet", timer: "", note: "Awaiting compliance sign-off before scheduling", stripe: true };
     default:
-      return { bg: "bg-coal", label: "Next payout", icon: "wallet", timer: "live", note: "Scheduled Mon, Jul 6 · 9:00 AM", stripe: true };
+      return { bg: "bg-coal", label: "Next payout", icon: "wallet", timer: "live", note: `Scheduled ${runDate}`, stripe: true };
   }
-}
-
-// Compliance checks — the failed batch has a failed float check; others all pass.
-function checksFor(status: PayoutStatus) {
-  return [
-    { label: "KYC verified on all recipients", pass: true },
-    { label: "Bank accounts validated", pass: status !== "Failed" },
-    { label: "Sufficient float on Paystack", pass: status !== "Failed" },
-  ];
 }
 
 export default async function Page({
@@ -61,13 +79,15 @@ export default async function Page({
   params: Promise<{ ref: string }>;
 }) {
   const { ref } = await params;
-  const batch = adminPayouts.find((p) => p.ref === ref);
+  const batch = await apiFetchSafe<AdminPayoutDetail>(`/admin/payouts/${ref}`);
   if (!batch) notFound();
+
   const status = batch.status;
-  const recipients = payoutRecipients(batch);
-  const failCount = 3;
-  const hero = heroFor(status, batch.total, failCount);
-  const checks = checksFor(status);
+  const recipients = batch.items ?? [];
+  const checks = batch.checks ?? [];
+  const failCount = recipients.filter((r) => r.status === "FAILED").length;
+  const runDate = fmtRun(batch.scheduledDate);
+  const hero = heroFor(status, runDate, failCount);
 
   return (
     <>
@@ -77,9 +97,11 @@ export default async function Page({
           <div>
             <h1 className="font-mono text-2xl font-bold sm:text-[28px]">{batch.ref}</h1>
             <div className="mt-2">
-              <span className={`inline-block rounded-full px-3 py-1 text-xs font-bold ${headPill[status]}`}>{headLabel[status]}</span>
+              <span className={`inline-block rounded-full px-3 py-1 text-xs font-bold ${headPill[status] ?? "bg-ink/10 text-ink/60"}`}>
+                {headLabel[status] ?? status}
+              </span>
             </div>
-            <p className="mt-2 text-sm text-ink/50">{batch.type} batch · {batch.recipients} recipients · runs {batch.runDate}</p>
+            <p className="mt-2 text-sm text-ink/50">{batch.audience} batch · {recipients.length} recipients · runs {runDate}</p>
           </div>
         </div>
         <button className="inline-flex items-center gap-2 rounded-xl border border-brand px-5 py-3 text-sm font-bold text-brand transition-colors hover:bg-brand/10">
@@ -94,10 +116,10 @@ export default async function Page({
         )}
         <div className="relative flex flex-wrap items-center justify-between gap-4">
           <div>
-            <p className={`flex items-center gap-2 font-bold ${status === "Scheduled" || status === "Review" ? "text-brand" : "text-white/85"}`}>
+            <p className={`flex items-center gap-2 font-bold ${status === "SCHEDULED" || status === "REVIEW" ? "text-brand" : "text-white/85"}`}>
               <Icon name={hero.icon} size={16} /> {hero.label}
             </p>
-            <p className="mt-2 text-3xl font-bold">{batch.total}</p>
+            <p className="mt-2 text-3xl font-bold">{naira(batch.total)}</p>
             <p className="mt-1 text-sm text-white/70">{hero.note}</p>
           </div>
           {hero.timer === "live" ? (
@@ -111,18 +133,22 @@ export default async function Page({
       {/* Compliance checks */}
       <div className="mt-6 rounded-2xl border border-ink/10 bg-white p-6">
         <p className="font-bold">Compliance checks</p>
-        <div className="mt-4 space-y-3">
-          {checks.map((c) => (
-            <div key={c.label} className="flex items-center justify-between border-b border-ink/8 pb-3 last:border-0 last:pb-0">
-              <span className="text-sm text-ink/60">{c.label}</span>
-              {c.pass ? (
-                <span className="inline-flex items-center gap-1 text-sm font-bold text-green-600"><Icon name="check" size={15} /> Pass</span>
-              ) : (
-                <span className="inline-flex items-center gap-1 text-sm font-bold text-red-600"><Icon name="close" size={15} /> Fail</span>
-              )}
-            </div>
-          ))}
-        </div>
+        {checks.length ? (
+          <div className="mt-4 space-y-3">
+            {checks.map((c) => (
+              <div key={c.label} className="flex items-center justify-between border-b border-ink/8 pb-3 last:border-0 last:pb-0">
+                <span className="text-sm text-ink/60">{c.label}</span>
+                {c.passed ? (
+                  <span className="inline-flex items-center gap-1 text-sm font-bold text-green-600"><Icon name="check" size={15} /> Pass</span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-sm font-bold text-red-600"><Icon name="close" size={15} /> Fail</span>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-4 text-sm text-ink/45">No compliance checks recorded.</p>
+        )}
       </div>
 
       {/* Recipients */}
@@ -138,13 +164,18 @@ export default async function Page({
               </tr>
             </thead>
             <tbody className="divide-y divide-ink/8">
-              {recipients.map((r, i) => (
-                <tr key={i}>
-                  <td className="py-3.5 pr-4 font-bold">{r.name}</td>
-                  <td className="px-4 py-3.5 text-ink/70">{r.type}</td>
-                  <td className="px-4 py-3.5 text-right font-bold tabular-nums">{r.expected}</td>
+              {recipients.map((r) => (
+                <tr key={r.id}>
+                  <td className="py-3.5 pr-4 font-bold">{r.beneficiary}</td>
+                  <td className="px-4 py-3.5 text-ink/70">{batch.audience}</td>
+                  <td className="px-4 py-3.5 text-right font-bold tabular-nums">{naira(r.amount)}</td>
                 </tr>
               ))}
+              {recipients.length === 0 && (
+                <tr>
+                  <td colSpan={3} className="py-6 text-center text-sm text-ink/45">No recipients in this batch.</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -156,15 +187,15 @@ export default async function Page({
   );
 }
 
-function PayoutActions({ status }: { status: PayoutStatus }) {
-  if (status === "Paid") {
+function PayoutActions({ status }: { status: string }) {
+  if (status === "PAID") {
     return (
       <div className="mt-6 flex items-center gap-2 rounded-2xl border border-green-200 bg-green-50 px-5 py-4 text-sm font-bold text-green-700">
         <Icon name="check" size={18} /> This batch has been released — no further action required.
       </div>
     );
   }
-  if (status === "Review") {
+  if (status === "REVIEW") {
     return (
       <div className="mt-6 grid gap-4 sm:grid-cols-2">
         <button className="inline-flex items-center justify-center gap-2 rounded-xl bg-green-600 py-3.5 text-sm font-bold text-white transition-opacity hover:opacity-90">
@@ -176,7 +207,7 @@ function PayoutActions({ status }: { status: PayoutStatus }) {
       </div>
     );
   }
-  if (status === "Failed") {
+  if (status === "FAILED") {
     return (
       <div className="mt-6 grid gap-4 sm:grid-cols-2">
         <button className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand py-3.5 text-sm font-bold text-white transition-opacity hover:opacity-90">
@@ -188,7 +219,14 @@ function PayoutActions({ status }: { status: PayoutStatus }) {
       </div>
     );
   }
-  // Scheduled
+  if (status === "CANCELLED") {
+    return (
+      <div className="mt-6 flex items-center gap-2 rounded-2xl border border-ink/15 bg-ink/[0.03] px-5 py-4 text-sm font-bold text-ink/60">
+        <Icon name="close" size={18} /> This batch was cancelled — no further action required.
+      </div>
+    );
+  }
+  // Scheduled / Held
   return (
     <div className="mt-6 grid gap-4 sm:grid-cols-2">
       <button className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-300 py-3.5 text-sm font-bold text-red-600 transition-colors hover:bg-red-50">

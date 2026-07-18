@@ -1,11 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { affiliates } from "@/lib/dashboard";
-import AffiliateDetail from "./AffiliateDetail";
-
-export function generateStaticParams() {
-  return affiliates.map((a) => ({ id: a.id }));
-}
+import { apiFetchSafe } from "@/lib/api";
+import AffiliateDetail, { type AffiliateDetailData } from "./AffiliateDetail";
 
 export async function generateMetadata({
   params,
@@ -13,8 +9,8 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  const a = affiliates.find((x) => x.id === id);
-  return { title: a ? a.name : "Affiliate" };
+  const a = await apiFetchSafe<AffiliateDetailData>(`/admin/affiliates/${id}`);
+  return { title: a ? `${a.user.firstName} ${a.user.lastName}` : "Affiliate" };
 }
 
 export default async function Page({
@@ -23,7 +19,7 @@ export default async function Page({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const affiliate = affiliates.find((a) => a.id === id);
+  const affiliate = await apiFetchSafe<AffiliateDetailData>(`/admin/affiliates/${id}`);
   if (!affiliate) notFound();
   return <AffiliateDetail affiliate={affiliate} />;
 }

@@ -4,10 +4,32 @@ import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import Icon from "@/components/Icon";
-import { productGallery, type AdminProduct } from "@/lib/dashboard";
+import { productGallery } from "@/lib/dashboard";
+
+export type AdminProductDetail = {
+  id: string;
+  vendorId: string | null;
+  title: string;
+  slug: string;
+  description: string | null;
+  price: string;
+  commissionRate: string;
+  stockQuantity: number;
+  category: string | null;
+  status: string;
+  rejectedReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+  vendor: { id: string; businessName: string } | null;
+  images: { id: string; url: string; sortOrder: number }[];
+  _count: { orderItems: number; reviews: number };
+};
 
 const label = "mb-1.5 block text-sm font-bold";
 const input = "w-full rounded-xl border border-ink/15 bg-white px-4 py-3 text-sm outline-none transition-colors placeholder:text-ink/35 focus:border-brand";
+
+const naira = (v: string | number) =>
+  `₦${Number(v).toLocaleString("en-NG", { maximumFractionDigits: 0 })}`;
 
 function StatFoot({ label, value }: { label: string; value: string }) {
   return (
@@ -21,50 +43,62 @@ function StatFoot({ label, value }: { label: string; value: string }) {
   );
 }
 
-export default function ProductDetail({ product: p }: { product: AdminProduct }) {
+export default function ProductDetail({ product: p }: { product: AdminProductDetail }) {
   const [active, setActive] = useState(0);
   const [promote, setPromote] = useState(false);
+
+  // Real product images when the vendor has uploaded any; otherwise the decorative
+  // local placeholders — these are not product data.
+  const remote = p.images.map((img) => img.url);
+  const gallery = remote.length > 0 ? remote : productGallery(p.title);
 
   return (
     <>
       <div className="flex items-start gap-3">
         <Link href="/products" className="mt-1.5 text-ink/60 hover:text-ink"><Icon name="arrow-left" size={20} /></Link>
         <div>
-          <h1 className="text-2xl font-bold sm:text-[28px]">{p.name} - {p.price}</h1>
+          <h1 className="text-2xl font-bold sm:text-[28px]">{p.title} - {naira(p.price)}</h1>
           <p className="mt-0.5 flex items-center gap-1.5 text-sm text-ink/50">
-            {p.category} <Icon name="star" size={14} className="text-brand" /> <span className="font-bold text-ink/70">{p.rating}</span> ({p.reviews})
+            {p.category ?? "—"} <Icon name="star" size={14} className="text-brand" /> <span className="font-bold text-ink/70">—</span> ({p._count.reviews})
           </p>
         </div>
       </div>
 
       {/* Gallery */}
       <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-        {productGallery(p.name).map((src, i) => (
+        {gallery.map((src, i) => (
           <button
-            key={i}
+            key={src}
             onClick={() => setActive(i)}
             className={`relative aspect-[4/3] overflow-hidden rounded-2xl transition-all ${active === i ? "ring-2 ring-dashed ring-brand ring-offset-2" : "hover:opacity-90"}`}
           >
-            <Image src={src} alt={`${p.name} ${i + 1}`} fill sizes="(max-width: 640px) 50vw, 25vw" className="object-cover" />
+            <Image
+              src={src}
+              alt={`${p.title} ${i + 1}`}
+              fill
+              sizes="(max-width: 640px) 50vw, 25vw"
+              className="object-cover"
+              unoptimized={remote.length > 0}
+            />
           </button>
         ))}
       </div>
 
       {/* Key stats */}
       <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatFoot label="Sales Price" value={p.salesPrice} />
-        <StatFoot label="Stock on hand" value={`${p.stock}`} />
-        <StatFoot label="Minimum stock level" value={`${p.minStock}`} />
-        <StatFoot label="Profit per unit" value={p.profitPerUnit} />
+        <StatFoot label="Sales Price" value={naira(p.price)} />
+        <StatFoot label="Stock on hand" value={`${p.stockQuantity}`} />
+        <StatFoot label="Minimum stock level" value="—" />
+        <StatFoot label="Profit per unit" value="—" />
       </div>
 
       {/* Sales performance */}
       <p className="mt-8 text-lg font-bold text-ink/70">Sales performance</p>
       <div className="mt-3 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatFoot label="Units Sold" value={`${p.unitsSold}`} />
-        <StatFoot label="Revenue" value={p.revenue} />
-        <StatFoot label="Total Profit" value={p.totalProfit} />
-        <StatFoot label="Channels" value={`${p.channels}`} />
+        <StatFoot label="Units Sold" value="—" />
+        <StatFoot label="Revenue" value="—" />
+        <StatFoot label="Total Profit" value="—" />
+        <StatFoot label="Channels" value="—" />
       </div>
 
       {/* Operational settings */}
@@ -73,7 +107,7 @@ export default function ProductDetail({ product: p }: { product: AdminProduct })
         <div className="mt-4 grid gap-5 sm:grid-cols-2">
           <div>
             <label className={label}>Sale price (₦)</label>
-            <input className={input} placeholder="Enter cost of item" defaultValue={p.salesPrice.replace("₦", "")} />
+            <input className={input} placeholder="Enter cost of item" defaultValue={p.price} />
           </div>
           <div>
             <label className={label}>Unit of measurement</label>
@@ -84,11 +118,11 @@ export default function ProductDetail({ product: p }: { product: AdminProduct })
           </div>
           <div>
             <label className={label}>Initial Stock</label>
-            <input className={input} placeholder="Enter your current stock level" defaultValue={p.stock} />
+            <input className={input} placeholder="Enter your current stock level" defaultValue={p.stockQuantity} />
           </div>
           <div>
             <label className={label}>Minimum stock level</label>
-            <input className={input} placeholder="Enter your minimum stock level" defaultValue={p.minStock} />
+            <input className={input} placeholder="Enter your minimum stock level" />
           </div>
         </div>
         <label className="mt-5 flex cursor-pointer items-center gap-3">

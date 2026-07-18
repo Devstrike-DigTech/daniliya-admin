@@ -1,11 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { vendors } from "@/lib/dashboard";
-import VendorDetail from "./VendorDetail";
-
-export function generateStaticParams() {
-  return vendors.map((v) => ({ id: v.id }));
-}
+import { apiFetchSafe } from "@/lib/api";
+import VendorDetail, { type VendorDetailData } from "./VendorDetail";
 
 export async function generateMetadata({
   params,
@@ -13,8 +9,8 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  const v = vendors.find((x) => x.id === id);
-  return { title: v ? v.name : "Vendor" };
+  const v = await apiFetchSafe<VendorDetailData>(`/admin/vendors/${id}`);
+  return { title: v ? v.businessName : "Vendor" };
 }
 
 export default async function Page({
@@ -23,7 +19,7 @@ export default async function Page({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const vendor = vendors.find((x) => x.id === id);
+  const vendor = await apiFetchSafe<VendorDetailData>(`/admin/vendors/${id}`);
   if (!vendor) notFound();
   return <VendorDetail vendor={vendor} />;
 }
