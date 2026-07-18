@@ -3,14 +3,37 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Icon from "@/components/Icon";
-import { bookings, bookingSummary } from "@/lib/dashboard";
 
-const STATUSES = ["All", "Requested", "In progress", "Completed"] as const;
+/** GET /admin/bookings */
+export type AdminBooking = {
+  ref: string;
+  status: string;
+  service: string | null;
+  name: string;
+  email: string;
+  phone: string;
+  description: string;
+  city: string | null;
+  address: string | null;
+  budget: string | null;
+  quotedAmount: string | null;
+  preferredDate: string | null;
+  attachments: string[];
+  adminNote: string | null;
+  cancelReason: string | null;
+  createdAt: string;
+  confirmedAt: string | null;
+  completedAt: string | null;
+};
+
+// BookingStatus enum (API): REQUESTED · CONFIRMED · IN_PROGRESS · COMPLETED · CANCELLED
+const STATUSES = ["All", "REQUESTED", "CONFIRMED", "IN_PROGRESS", "COMPLETED", "CANCELLED"] as const;
 const statusPill: Record<string, string> = {
-  Requested: "bg-amber-100 text-amber-700",
-  "In progress": "bg-orange-100 text-orange-700",
-  Completed: "bg-green-100 text-green-700",
-  Confirmed: "bg-blue-100 text-blue-700",
+  REQUESTED: "bg-amber-100 text-amber-700",
+  CONFIRMED: "bg-blue-100 text-blue-700",
+  IN_PROGRESS: "bg-orange-100 text-orange-700",
+  COMPLETED: "bg-green-100 text-green-700",
+  CANCELLED: "bg-red-100 text-red-600",
 };
 const servicePill: Record<string, string> = {
   "Dry cleaning": "bg-amber-100 text-amber-700",
@@ -19,7 +42,13 @@ const servicePill: Record<string, string> = {
   Fumigation: "bg-green-100 text-green-700",
 };
 
-export default function BookingsView() {
+const label = (v: string) => v.charAt(0) + v.slice(1).toLowerCase().replace(/_/g, " ");
+const naira = (v: string | number) =>
+  `₦${Number(v).toLocaleString("en-NG", { maximumFractionDigits: 0 })}`;
+const shortDate = (iso: string) =>
+  new Date(iso).toLocaleDateString("en-NG", { day: "2-digit", month: "short", year: "numeric" });
+
+export default function BookingsView({ bookings }: { bookings: AdminBooking[] }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<(typeof STATUSES)[number]>("All");
@@ -27,15 +56,29 @@ export default function BookingsView() {
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
     return bookings.filter((b) => {
-      const mq = !q || `${b.ref} ${b.customer} ${b.service} ${b.phone}`.toLowerCase().includes(q);
+      const mq = !q || `${b.ref} ${b.name} ${b.service ?? ""} ${b.phone}`.toLowerCase().includes(q);
       const ms = status === "All" || b.status === status;
       return mq && ms;
     });
-  }, [query, status]);
+  }, [bookings, query, status]);
+
+  const summary = useMemo(() => {
+    const completedValue = bookings
+      .filter((b) => b.status === "COMPLETED")
+      .reduce((n, b) => n + Number(b.quotedAmount ?? 0), 0);
+    return {
+      requested: bookings.filter((b) => b.status === "REQUESTED").length,
+      confirmed: bookings.filter((b) => b.status === "CONFIRMED").length,
+      inProgress: bookings.filter((b) => b.status === "IN_PROGRESS").length,
+      completedValue,
+    };
+  }, [bookings]);
 
   const exportCsv = () => {
-    const header = ["Booking", "Date", "Customer", "City", "Phone", "Status", "Service", "Amount"];
-    const lines = rows.map((b) => [b.ref, b.date, b.customer, b.city, b.phone, b.status, b.service, b.amount.replace(/,/g, "")].join(","));
+    const header = ["Booking", "Date", "Customer", "City", "Phone", "Status", "Service", "Quoted"];
+    const lines = rows.map((b) =>
+      [b.ref, shortDate(b.createdAt), b.name, b.city ?? "", b.phone, b.status, b.service ?? "", b.quotedAmount ?? ""].join(","),
+    );
     const blob = new Blob([[header.join(","), ...lines].join("\n")], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -58,10 +101,10 @@ export default function BookingsView() {
       </div>
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard label="Requested" value={`${bookingSummary.requested}`} icon="calendar" accent="bg-brand" soft="bg-brand/15 text-brand" />
-        <SummaryCard label="Confirmed" value={`${bookingSummary.confirmed}`} icon="calendar" accent="bg-green-500" soft="bg-green-500/15 text-green-600" />
-        <SummaryCard label="In progress" value={`${bookingSummary.inProgress}`} icon="calendar" accent="bg-orange-500" soft="bg-orange-500/15 text-orange-600" />
-        <SummaryCard label="Completed value" value={bookingSummary.completedValue} icon="calendar" accent="bg-green-500" soft="bg-green-500/15 text-green-600" />
+        <SummaryCard label="Requested" value={`${summary.requested}`} icon="calendar" accent="bg-brand" soft="bg-brand/15 text-brand" />
+        <SummaryCard label="Confirmed" value={`${summary.confirmed}`} icon="calendar" accent="bg-green-500" soft="bg-green-500/15 text-green-600" />
+        <SummaryCard label="In progress" value={`${summary.inProgress}`} icon="calendar" accent="bg-orange-500" soft="bg-orange-500/15 text-orange-600" />
+        <SummaryCard label="Completed value" value={naira(summary.completedValue)} icon="calendar" accent="bg-green-500" soft="bg-green-500/15 text-green-600" />
       </div>
 
       <div className="mt-6 rounded-2xl border border-ink/10 bg-white p-5 sm:p-6">
@@ -88,7 +131,7 @@ export default function BookingsView() {
           </div>
           <div className="flex flex-wrap gap-2">
             {STATUSES.map((s) => (
-              <button key={s} onClick={() => setStatus(s)} className={`rounded-full px-5 py-2 text-sm font-bold transition-colors ${status === s ? "bg-brand text-white" : "border border-ink/15 text-ink/60 hover:bg-ink/5"}`}>{s}</button>
+              <button key={s} onClick={() => setStatus(s)} className={`rounded-full px-5 py-2 text-sm font-bold transition-colors ${status === s ? "bg-brand text-white" : "border border-ink/15 text-ink/60 hover:bg-ink/5"}`}>{s === "All" ? s : label(s)}</button>
             ))}
           </div>
         </div>
@@ -111,19 +154,27 @@ export default function BookingsView() {
               {rows.map((b) => (
                 <tr key={b.ref} className="transition-colors hover:bg-ink/[0.02]">
                   <td className="py-4 pr-4 font-mono text-xs font-bold text-ink/80">{b.ref}</td>
-                  <td className="px-4 py-4 text-ink/60">{b.date}</td>
+                  <td className="px-4 py-4 text-ink/60">{shortDate(b.createdAt)}</td>
                   <td className="px-4 py-4">
-                    <p className="font-bold">{b.customer}</p>
-                    <p className="text-xs text-ink/45">{b.city}</p>
+                    <p className="font-bold">{b.name}</p>
+                    <p className="text-xs text-ink/45">{b.city ?? "—"}</p>
                   </td>
                   <td className="px-4 py-4 text-ink/70">{b.phone}</td>
-                  <td className="px-4 py-4"><span className={`inline-block rounded-full px-3 py-1 text-xs font-bold ${statusPill[b.status]}`}>{b.status}</span></td>
-                  <td className="px-4 py-4"><span className={`inline-block rounded-full px-3 py-1 text-xs font-bold ${servicePill[b.service] ?? "bg-ink/8 text-ink/60"}`}>{b.service}</span></td>
+                  <td className="px-4 py-4"><span className={`inline-block rounded-full px-3 py-1 text-xs font-bold ${statusPill[b.status] ?? "bg-ink/8 text-ink/60"}`}>{label(b.status)}</span></td>
                   <td className="px-4 py-4">
-                    <div className="flex items-center gap-1.5">
-                      <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-ink/[0.06] text-ink/30"><Icon name="package" size={16} /></span>
-                      <span className="text-xs font-bold text-ink/50">+{b.attachments - 1}</span>
-                    </div>
+                    {b.service
+                      ? <span className={`inline-block rounded-full px-3 py-1 text-xs font-bold ${servicePill[b.service] ?? "bg-ink/8 text-ink/60"}`}>{b.service}</span>
+                      : <span className="text-ink/45">—</span>}
+                  </td>
+                  <td className="px-4 py-4">
+                    {b.attachments.length > 0 ? (
+                      <div className="flex items-center gap-1.5">
+                        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-ink/[0.06] text-ink/30"><Icon name="package" size={16} /></span>
+                        {b.attachments.length > 1 && <span className="text-xs font-bold text-ink/50">+{b.attachments.length - 1}</span>}
+                      </div>
+                    ) : (
+                      <span className="text-ink/45">—</span>
+                    )}
                   </td>
                   <td className="px-4 py-4 text-right">
                     <button onClick={() => router.push(`/bookings/${b.ref}`)} className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-xs font-bold text-white transition-opacity hover:opacity-90">

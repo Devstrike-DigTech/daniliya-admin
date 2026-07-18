@@ -4,24 +4,45 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Icon from "@/components/Icon";
-import {
-  adminProducts,
-  productSummary,
-  productImage,
-  productGallery,
-  type AdminProduct,
-  type ProductScope,
-} from "@/lib/dashboard";
+import { productImage, productGallery } from "@/lib/dashboard";
 
-const STATUSES = ["All", "Published", "Pending", "Rejected"] as const;
-const CATEGORIES = ["All", ...Array.from(new Set(adminProducts.map((p) => p.category)))];
-const statusPill: Record<string, string> = {
-  Published: "bg-green-100 text-green-700",
-  Rejected: "bg-red-100 text-red-600",
-  Pending: "bg-amber-100 text-amber-700",
+/** GET /admin/products */
+export type AdminProduct = {
+  id: string;
+  vendorId: string | null;
+  title: string;
+  slug: string;
+  description: string | null;
+  price: string;
+  commissionRate: string;
+  stockQuantity: number;
+  category: string | null;
+  status: string;
+  rejectedReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+  vendor: { businessName: string } | null;
 };
 
-export default function ProductsView() {
+type ProductScope = "Platform" | "Vendor";
+
+// ProductStatus enum (API): DRAFT · PENDING_REVIEW · ACTIVE · REJECTED · REMOVED
+const STATUSES = ["All", "ACTIVE", "PENDING_REVIEW", "DRAFT", "REJECTED", "REMOVED"] as const;
+const statusPill: Record<string, string> = {
+  ACTIVE: "bg-green-100 text-green-700",
+  PENDING_REVIEW: "bg-amber-100 text-amber-700",
+  DRAFT: "bg-ink/8 text-ink/60",
+  REJECTED: "bg-red-100 text-red-600",
+  REMOVED: "bg-ink/10 text-ink/50",
+};
+
+const label = (v: string) => v.charAt(0) + v.slice(1).toLowerCase().replace(/_/g, " ");
+const naira = (v: string | number) =>
+  `₦${Number(v).toLocaleString("en-NG", { maximumFractionDigits: 0 })}`;
+const scopeOf = (p: AdminProduct): ProductScope => (p.vendorId ? "Vendor" : "Platform");
+const sellerOf = (p: AdminProduct) => p.vendor?.businessName ?? "Daniliya";
+
+export default function ProductsView({ products }: { products: AdminProduct[] }) {
   const router = useRouter();
   const [scope, setScope] = useState<ProductScope>("Platform");
   const [query, setQuery] = useState("");
@@ -30,20 +51,35 @@ export default function ProductsView() {
   const [filterOpen, setFilterOpen] = useState(false);
   const [modal, setModal] = useState<AdminProduct | null>(null);
 
+  const categories = useMemo(
+    () => ["All", ...Array.from(new Set(products.map((p) => p.category).filter((c): c is string => !!c)))],
+    [products],
+  );
+
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return adminProducts.filter((p) => {
-      const msc = p.scope === scope;
-      const mq = !q || `${p.name} ${p.vendor} ${p.category}`.toLowerCase().includes(q);
+    return products.filter((p) => {
+      const msc = scopeOf(p) === scope;
+      const mq = !q || `${p.title} ${sellerOf(p)} ${p.category ?? ""}`.toLowerCase().includes(q);
       const ms = status === "All" || p.status === status;
       const mc = cat === "All" || p.category === cat;
       return msc && mq && ms && mc;
     });
-  }, [scope, query, status, cat]);
+  }, [products, scope, query, status, cat]);
+
+  const summary = useMemo(
+    () => ({
+      total: products.length,
+      published: products.filter((p) => p.status === "ACTIVE").length,
+    }),
+    [products],
+  );
 
   const exportCsv = () => {
-    const header = ["Product", "Scope", "Category", "Vendor", "Price", "Status"];
-    const lines = rows.map((p) => [p.name, p.scope, p.category, p.vendor, p.price.replace(/,/g, ""), p.status].join(","));
+    const header = ["Product", "Scope", "Category", "Seller", "Price", "Stock", "Status"];
+    const lines = rows.map((p) =>
+      [p.title, scopeOf(p), p.category ?? "", sellerOf(p), p.price, p.stockQuantity, p.status].join(","),
+    );
     const blob = new Blob([[header.join(","), ...lines].join("\n")], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -66,10 +102,11 @@ export default function ProductsView() {
       </div>
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard label="Total products" value={`${productSummary.total}`} icon="package" accent="bg-brand" soft="bg-brand/15 text-brand" />
-        <SummaryCard label="Total published" value={`${productSummary.published}`} icon="check" accent="bg-green-500" soft="bg-green-500/15 text-green-600" />
-        <SummaryCard label="Total Sales from products" value={productSummary.salesFromProducts} icon="chart" accent="bg-orange-500" soft="bg-orange-500/15 text-orange-600" />
-        <SummaryCard label="Total profit from sales" value={productSummary.feeProfit} icon="wallet" accent="bg-[#6d3fa0]" soft="bg-[#6d3fa0]/15 text-[#6d3fa0]" />
+        <SummaryCard label="Total products" value={`${summary.total}`} icon="package" accent="bg-brand" soft="bg-brand/15 text-brand" />
+        <SummaryCard label="Total published" value={`${summary.published}`} icon="check" accent="bg-green-500" soft="bg-green-500/15 text-green-600" />
+        {/* No sales / profit aggregates are exposed by /admin/products — intentionally blank. */}
+        <SummaryCard label="Total Sales from products" value="—" icon="chart" accent="bg-orange-500" soft="bg-orange-500/15 text-orange-600" />
+        <SummaryCard label="Total profit from sales" value="—" icon="wallet" accent="bg-[#6d3fa0]" soft="bg-[#6d3fa0]/15 text-[#6d3fa0]" />
       </div>
 
       {/* Scope toggle */}
@@ -112,7 +149,7 @@ export default function ProductsView() {
               <div className="absolute right-0 top-14 z-20 w-56 rounded-xl border border-ink/10 bg-white p-3 shadow-lg">
                 <p className="px-1 pb-2 text-xs font-bold uppercase tracking-wide text-ink/45">Category</p>
                 <div className="max-h-64 space-y-1 overflow-y-auto">
-                  {CATEGORIES.map((c) => (
+                  {categories.map((c) => (
                     <button
                       key={c}
                       onClick={() => { setCat(c); setFilterOpen(false); }}
@@ -137,7 +174,7 @@ export default function ProductsView() {
             onClick={() => setStatus(s)}
             className={`rounded-full px-5 py-2 text-sm font-bold transition-colors ${status === s ? "bg-brand text-white" : "border border-ink/15 text-ink/60 hover:bg-ink/5"}`}
           >
-            {s}
+            {s === "All" ? s : label(s)}
           </button>
         ))}
       </div>
@@ -147,16 +184,16 @@ export default function ProductsView() {
         {rows.map((p) => (
           <div key={p.id} className="overflow-hidden rounded-2xl border border-ink/10 bg-white">
             <div className="relative aspect-[16/10] bg-ink/[0.04]">
-              <Image src={productImage(p.name)} alt={p.name} fill sizes="(max-width: 640px) 100vw, 33vw" className="object-cover" />
+              <Image src={productImage(p.title)} alt={p.title} fill sizes="(max-width: 640px) 100vw, 33vw" className="object-cover" />
             </div>
             <div className="p-5">
-              <p className="text-xs font-bold uppercase tracking-wide text-ink/40">{p.source}</p>
-              <p className="mt-1 text-lg font-bold">{p.name}</p>
-              <p className="mt-1 text-sm text-ink/60">{p.price}</p>
+              <p className="text-xs font-bold uppercase tracking-wide text-ink/40">{sellerOf(p)}</p>
+              <p className="mt-1 text-lg font-bold">{p.title}</p>
+              <p className="mt-1 text-sm text-ink/60">{naira(p.price)}</p>
               <div className="mt-3 flex items-center justify-between">
-                <span className={`inline-block rounded-full px-3 py-1 text-xs font-bold ${statusPill[p.status]}`}>{p.status}</span>
+                <span className={`inline-block rounded-full px-3 py-1 text-xs font-bold ${statusPill[p.status] ?? "bg-ink/8 text-ink/60"}`}>{label(p.status)}</span>
                 <button
-                  onClick={() => (p.status === "Pending" ? setModal(p) : router.push(`/products/${p.id}`))}
+                  onClick={() => (p.status === "PENDING_REVIEW" ? setModal(p) : router.push(`/products/${p.id}`))}
                   className="inline-flex items-center gap-1 text-sm font-bold text-brand hover:underline"
                 >
                   Manage <Icon name="arrow-right" size={15} />
@@ -175,28 +212,30 @@ export default function ProductsView() {
           <div className="relative z-10 max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-xs text-ink/45">{modal.id.toUpperCase()}</p>
-                <p className="text-xl font-bold">{modal.name} - {modal.price}</p>
-                <p className="text-sm text-ink/55">{modal.category}</p>
+                <p className="text-xs text-ink/45">{modal.slug.toUpperCase()}</p>
+                <p className="text-xl font-bold">{modal.title} - {naira(modal.price)}</p>
+                <p className="text-sm text-ink/55">{modal.category ?? "—"}</p>
               </div>
               <button onClick={() => setModal(null)} className="text-ink/40 hover:text-ink"><Icon name="close" size={20} /></button>
             </div>
             <div className="mt-4 grid grid-cols-4 gap-3">
-              {productGallery(modal.name).map((src, k) => (
+              {productGallery(modal.title).map((src, k) => (
                 <div key={k} className="relative aspect-square overflow-hidden rounded-xl">
-                  <Image src={src} alt={`${modal.name} ${k + 1}`} fill sizes="160px" className="object-cover" />
+                  <Image src={src} alt={`${modal.title} ${k + 1}`} fill sizes="160px" className="object-cover" />
                 </div>
               ))}
             </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <ModalField label="Sales Price" value={modal.salesPrice} />
-              <ModalField label="Cost Price" value={modal.costPrice} />
-              <ModalField label="Stock on hand" value={`${modal.stock}`} />
-              <ModalField label="Minimum Stock level" value={`${modal.minStock}`} />
+              <ModalField label="Sales Price" value={naira(modal.price)} />
+              {/* API has no cost price or minimum stock level. */}
+              <ModalField label="Cost Price" value="—" />
+              <ModalField label="Stock on hand" value={`${modal.stockQuantity}`} />
+              <ModalField label="Minimum Stock level" value="—" />
               <div className="rounded-xl bg-ink/[0.03] px-4 py-3 sm:col-span-2">
-                <p className="text-xs text-ink/45">Est. margin</p>
-                <p className="mt-0.5 text-lg font-bold">{modal.marginPct}%</p>
-                <p className="text-xs text-ink/50">Profit per unit: {modal.profitPerUnit}</p>
+                <p className="text-xs text-ink/45">Commission rate</p>
+                <p className="mt-0.5 text-lg font-bold">{Number(modal.commissionRate)}%</p>
+                {/* No margin / profit-per-unit figure in the API. */}
+                <p className="text-xs text-ink/50">Profit per unit: —</p>
               </div>
             </div>
             <div className="mt-6 grid gap-3 sm:grid-cols-2">

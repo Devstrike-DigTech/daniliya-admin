@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
-import OrdersView from "./OrdersView";
+import { apiFetchSafe } from "@/lib/api";
+import OrdersView, { type AdminOrder } from "./OrdersView";
 
 export const metadata: Metadata = { title: "Orders" };
 
-export default function OrdersPage() {
-  return <OrdersView />;
+export default async function OrdersPage() {
+  const orders = await apiFetchSafe<AdminOrder[]>("/admin/orders");
+  return <OrdersView orders={orders ?? []} />;
 }

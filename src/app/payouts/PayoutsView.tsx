@@ -3,18 +3,35 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Icon from "@/components/Icon";
-import { adminPayouts, payoutSummary } from "@/lib/dashboard";
 
-const AUDIENCES = ["All", "Affiliate", "Vendor", "Influencer"] as const;
-const PILLS = ["All", "Review", "Scheduled", "Paid", "Failed"] as const;
-const statusPill: Record<string, string> = {
-  Scheduled: "bg-indigo-100 text-indigo-700",
-  Review: "bg-amber-100 text-amber-700",
-  Paid: "bg-green-100 text-green-700",
-  Failed: "bg-red-100 text-red-600",
+export type PayoutRow = {
+  ref: string;
+  audience: string;
+  status: string;
+  recipients: number;
+  total: string;
+  scheduledDate: string | null;
 };
 
-export default function PayoutsView() {
+const AUDIENCES = ["All", "AFFILIATE", "VENDOR", "INFLUENCER"] as const;
+const PILLS = ["All", "REVIEW", "SCHEDULED", "HELD", "PAID", "FAILED", "CANCELLED"] as const;
+
+const statusPill: Record<string, string> = {
+  SCHEDULED: "bg-indigo-100 text-indigo-700",
+  REVIEW: "bg-amber-100 text-amber-700",
+  HELD: "bg-ink/8 text-ink/60",
+  PAID: "bg-green-100 text-green-700",
+  FAILED: "bg-red-100 text-red-600",
+  CANCELLED: "bg-ink/8 text-ink/60",
+};
+
+const titled = (v: string) => v.charAt(0) + v.slice(1).toLowerCase();
+const naira = (v: string | number) =>
+  `₦${Number(v).toLocaleString("en-NG", { maximumFractionDigits: 0 })}`;
+const runDate = (v: string | null) =>
+  v ? new Date(v).toLocaleDateString("en-NG", { day: "2-digit", month: "short", year: "numeric" }) : "—";
+
+export default function PayoutsView({ payouts }: { payouts: PayoutRow[] }) {
   const router = useRouter();
   const [audience, setAudience] = useState<(typeof AUDIENCES)[number]>("All");
   const [pill, setPill] = useState<(typeof PILLS)[number]>("All");
@@ -22,17 +39,24 @@ export default function PayoutsView() {
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return adminPayouts.filter((p) => {
-      const ma = audience === "All" || p.type === audience;
+    return payouts.filter((p) => {
+      const ma = audience === "All" || p.audience === audience;
       const mp = pill === "All" || p.status === pill;
-      const mq = !q || `${p.ref} ${p.type}`.toLowerCase().includes(q);
+      const mq = !q || `${p.ref} ${p.audience}`.toLowerCase().includes(q);
       return ma && mp && mq;
     });
-  }, [audience, pill, query]);
+  }, [payouts, audience, pill, query]);
+
+  const sum = (list: PayoutRow[]) => list.reduce((n, p) => n + Number(p.total), 0);
+  const queuedBatches = payouts.filter((p) => p.status === "SCHEDULED" || p.status === "REVIEW");
+  const paidBatches = payouts.filter((p) => p.status === "PAID");
+  const failedBatches = payouts.filter((p) => p.status === "FAILED");
 
   const exportCsv = () => {
     const header = ["Batch", "Type", "Run Date", "Recipients", "Total", "Status"];
-    const lines = rows.map((p) => [p.ref, p.type, p.runDate, p.recipients, p.total.replace(/,/g, ""), p.status].join(","));
+    const lines = rows.map((p) =>
+      [p.ref, p.audience, runDate(p.scheduledDate), p.recipients, p.total, p.status].join(","),
+    );
     const blob = new Blob([[header.join(","), ...lines].join("\n")], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -57,15 +81,30 @@ export default function PayoutsView() {
       <div className="mt-6 flex rounded-2xl bg-ink/5 p-1.5">
         {AUDIENCES.map((a) => (
           <button key={a} onClick={() => setAudience(a)} className={`flex-1 rounded-xl px-4 py-3 text-sm font-bold transition-colors ${audience === a ? "bg-white shadow-sm" : "text-ink/55 hover:text-ink"}`}>
-            {a === "All" ? "All" : `${a}s`}
+            {a === "All" ? "All" : `${titled(a)}s`}
           </button>
         ))}
       </div>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-3">
-        <SummaryCard label="Queued for Monday" value={payoutSummary.queued} sub={payoutSummary.queuedSub} accent="bg-brand" />
-        <SummaryCard label="Paid last cycle" value={payoutSummary.paidLastCycle} sub="Paid last cycle" accent="bg-green-500" />
-        <SummaryCard label="Failed transfers" value={`${payoutSummary.failed}`} sub={`Requires retry — ${payoutSummary.failedRef}`} accent="bg-orange-500" />
+        <SummaryCard
+          label="Queued for payout"
+          value={naira(sum(queuedBatches))}
+          sub={`${queuedBatches.length} batch${queuedBatches.length === 1 ? "" : "es"} awaiting release`}
+          accent="bg-brand"
+        />
+        <SummaryCard
+          label="Paid out"
+          value={naira(sum(paidBatches))}
+          sub={`${paidBatches.length} batch${paidBatches.length === 1 ? "" : "es"} settled`}
+          accent="bg-green-500"
+        />
+        <SummaryCard
+          label="Failed transfers"
+          value={`${failedBatches.length}`}
+          sub={failedBatches.length ? `Requires retry — ${failedBatches.map((b) => b.ref).join(", ")}` : "No failed transfers"}
+          accent="bg-orange-500"
+        />
       </div>
 
       <div className="mt-6 rounded-2xl border border-ink/10 bg-white p-5 sm:p-6">
@@ -83,7 +122,7 @@ export default function PayoutsView() {
           </div>
           <div className="flex flex-wrap gap-2">
             {PILLS.map((p) => (
-              <button key={p} onClick={() => setPill(p)} className={`rounded-full px-5 py-2 text-sm font-bold transition-colors ${pill === p ? "bg-brand text-white" : "border border-ink/15 text-ink/60 hover:bg-ink/5"}`}>{p}</button>
+              <button key={p} onClick={() => setPill(p)} className={`rounded-full px-5 py-2 text-sm font-bold transition-colors ${pill === p ? "bg-brand text-white" : "border border-ink/15 text-ink/60 hover:bg-ink/5"}`}>{p === "All" ? "All" : titled(p)}</button>
             ))}
           </div>
         </div>
@@ -105,11 +144,11 @@ export default function PayoutsView() {
               {rows.map((p) => (
                 <tr key={p.ref} className="transition-colors hover:bg-ink/[0.02]">
                   <td className="py-4 pr-4 font-mono text-xs font-bold text-ink/80">{p.ref}</td>
-                  <td className="px-4 py-4 text-ink/70">{p.type}</td>
-                  <td className="px-4 py-4 text-ink/60">{p.runDate}</td>
+                  <td className="px-4 py-4 text-ink/70">{titled(p.audience)}</td>
+                  <td className="px-4 py-4 text-ink/60">{runDate(p.scheduledDate)}</td>
                   <td className="px-4 py-4 text-right tabular-nums">{p.recipients}</td>
-                  <td className="px-4 py-4 text-right font-bold tabular-nums">{p.total}</td>
-                  <td className="px-4 py-4"><span className={`inline-block rounded-full px-3 py-1 text-xs font-bold ${statusPill[p.status]}`}>{p.status}</span></td>
+                  <td className="px-4 py-4 text-right font-bold tabular-nums">{naira(p.total)}</td>
+                  <td className="px-4 py-4"><span className={`inline-block rounded-full px-3 py-1 text-xs font-bold ${statusPill[p.status] ?? "bg-ink/8 text-ink/60"}`}>{titled(p.status)}</span></td>
                   <td className="px-4 py-4 text-right">
                     <button onClick={() => router.push(`/payouts/${p.ref}`)} className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-xs font-bold text-white transition-opacity hover:opacity-90"><Icon name="eye" size={15} /> View</button>
                   </td>

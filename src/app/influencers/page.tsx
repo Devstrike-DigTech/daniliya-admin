@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
-import InfluencersView from "./InfluencersView";
+import { apiFetchSafe } from "@/lib/api";
+import InfluencersView, { type InfluencerRow } from "./InfluencersView";
 
 export const metadata: Metadata = { title: "Influencers" };
 
-export default function InfluencersPage() {
-  return <InfluencersView />;
+export default async function InfluencersPage() {
+  const influencers = await apiFetchSafe<InfluencerRow[]>("/admin/influencers");
+  return <InfluencersView influencers={influencers ?? []} />;
 }

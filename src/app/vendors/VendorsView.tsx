@@ -3,11 +3,28 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Icon from "@/components/Icon";
-import { vendors, vendorSummary } from "@/lib/dashboard";
+
+/** Shape returned by GET /admin/vendors. */
+export type VendorRow = {
+  id: string;
+  userId: string;
+  businessName: string;
+  productCategory: string | null;
+  takeRateBps: number | null;
+  isApproved: boolean;
+  approvedAt: string | null;
+  rejectedReason: string | null;
+  createdAt: string;
+  user: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    status: string;
+  };
+};
 
 const initials = (n: string) => n.split(/[\s&]+/).filter(Boolean).map((p) => p[0]).join("").slice(0, 2).toUpperCase();
 const STATUSES = ["All", "Approved", "Pending", "Rejected"] as const;
-const CATEGORIES = ["All", ...Array.from(new Set(vendors.map((v) => v.category)))];
 
 const statusPill: Record<string, string> = {
   Approved: "bg-green-100 text-green-700",
@@ -15,26 +32,49 @@ const statusPill: Record<string, string> = {
   Rejected: "bg-red-100 text-red-600",
 };
 
-export default function VendorsView() {
+/** Derived: the API exposes isApproved + rejectedReason, not a status enum. */
+const reviewStatus = (v: VendorRow) =>
+  v.isApproved ? "Approved" : v.rejectedReason ? "Rejected" : "Pending";
+
+export default function VendorsView({ vendors }: { vendors: VendorRow[] }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<(typeof STATUSES)[number]>("All");
   const [cat, setCat] = useState("All");
   const [filterOpen, setFilterOpen] = useState(false);
 
+  const categories = useMemo(
+    () => ["All", ...Array.from(new Set(vendors.map((v) => v.productCategory).filter((c): c is string => !!c)))],
+    [vendors],
+  );
+
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
     return vendors.filter((v) => {
-      const mq = !q || `${v.name} ${v.code} ${v.category} ${v.email}`.toLowerCase().includes(q);
-      const ms = status === "All" || v.status === status;
-      const mc = cat === "All" || v.category === cat;
+      const mq =
+        !q || `${v.businessName} ${v.productCategory ?? ""} ${v.user.email}`.toLowerCase().includes(q);
+      const ms = status === "All" || reviewStatus(v) === status;
+      const mc = cat === "All" || v.productCategory === cat;
       return mq && ms && mc;
     });
-  }, [query, status, cat]);
+  }, [vendors, query, status, cat]);
+
+  // Derived from live rows. Product counts and fee profit are not on /admin/vendors.
+  const activeCount = vendors.filter((v) => v.isApproved).length;
+  const awaitingCount = vendors.filter((v) => reviewStatus(v) === "Pending").length;
 
   const exportCsv = () => {
-    const header = ["Vendor", "Code", "Category", "City", "Products", "Earnings", "Status"];
-    const lines = rows.map((v) => [v.name, v.code, v.category, v.city, v.products, v.earnings.replace(/,/g, ""), v.status].join(","));
+    const header = ["Vendor", "Category", "Contact", "Email", "Take rate (bps)", "Status"];
+    const lines = rows.map((v) =>
+      [
+        v.businessName,
+        v.productCategory ?? "",
+        `${v.user.firstName} ${v.user.lastName}`,
+        v.user.email,
+        v.takeRateBps ?? "",
+        reviewStatus(v),
+      ].join(","),
+    );
     const blob = new Blob([[header.join(","), ...lines].join("\n")], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -57,10 +97,11 @@ export default function VendorsView() {
       </div>
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard label="Active Vendors" value={`${vendorSummary.active}`} icon="store" accent="bg-green-500" soft="bg-green-500/15 text-green-600" />
-        <SummaryCard label="Awaiting review" value={`${vendorSummary.awaiting}`} icon="clock" accent="bg-amber-500" soft="bg-amber-500/15 text-amber-600" />
-        <SummaryCard label="Products Live" value={`${vendorSummary.productsLive}`} icon="package" accent="bg-orange-500" soft="bg-orange-500/15 text-orange-600" />
-        <SummaryCard label="Total profit from fees" value={vendorSummary.feeProfit} icon="wallet" accent="bg-blue-500" soft="bg-blue-500/15 text-blue-600" />
+        <SummaryCard label="Active Vendors" value={`${activeCount}`} icon="store" accent="bg-green-500" soft="bg-green-500/15 text-green-600" />
+        <SummaryCard label="Awaiting review" value={`${awaitingCount}`} icon="clock" accent="bg-amber-500" soft="bg-amber-500/15 text-amber-600" />
+        {/* Not derivable from /admin/vendors */}
+        <SummaryCard label="Products Live" value="—" icon="package" accent="bg-orange-500" soft="bg-orange-500/15 text-orange-600" />
+        <SummaryCard label="Total profit from fees" value="—" icon="wallet" accent="bg-blue-500" soft="bg-blue-500/15 text-blue-600" />
       </div>
 
       <div className="mt-6 rounded-2xl border border-ink/10 bg-white p-5 sm:p-6">
@@ -90,7 +131,7 @@ export default function VendorsView() {
                 <div className="absolute right-0 top-14 z-20 w-56 rounded-xl border border-ink/10 bg-white p-3 shadow-lg">
                   <p className="px-1 pb-2 text-xs font-bold uppercase tracking-wide text-ink/45">Category</p>
                   <div className="max-h-64 space-y-1 overflow-y-auto">
-                    {CATEGORIES.map((c) => (
+                    {categories.map((c) => (
                       <button
                         key={c}
                         onClick={() => { setCat(c); setFilterOpen(false); }}
@@ -133,33 +174,37 @@ export default function VendorsView() {
               </tr>
             </thead>
             <tbody className="divide-y divide-ink/8">
-              {rows.map((v) => (
-                <tr key={v.id} className="transition-colors hover:bg-ink/[0.02]">
-                  <td className="py-4 pr-4">
-                    <div className="flex items-center gap-3">
-                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand/15 text-sm font-bold text-brand">
-                        {initials(v.name)}
-                      </span>
-                      <div className="min-w-0">
-                        <p className="font-bold">{v.name}</p>
-                        <p className="truncate text-xs text-ink/45">{v.code}</p>
+              {rows.map((v) => {
+                const label = reviewStatus(v);
+                return (
+                  <tr key={v.id} className="transition-colors hover:bg-ink/[0.02]">
+                    <td className="py-4 pr-4">
+                      <div className="flex items-center gap-3">
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand/15 text-sm font-bold text-brand">
+                          {initials(v.businessName)}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="font-bold">{v.businessName}</p>
+                          <p className="truncate text-xs text-ink/45">{v.user.email}</p>
+                        </div>
                       </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-4 text-ink/70">{v.category}</td>
-                  <td className="px-4 py-4 text-ink/70">{v.city}</td>
-                  <td className="px-4 py-4 text-right tabular-nums">{v.products}</td>
-                  <td className="px-4 py-4 text-right font-bold tabular-nums">{v.earnings}</td>
-                  <td className="px-4 py-4">
-                    <span className={`inline-block rounded-full px-3 py-1 text-xs font-bold ${statusPill[v.status]}`}>{v.status}</span>
-                  </td>
-                  <td className="px-4 py-4 text-right">
-                    <button onClick={() => router.push(`/vendors/${v.id}`)} className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-xs font-bold text-white transition-opacity hover:opacity-90">
-                      <Icon name="eye" size={15} /> View
-                    </button>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="px-4 py-4 text-ink/70">{v.productCategory ?? <span className="text-ink/45">—</span>}</td>
+                    {/* city / products / earnings: no field on /admin/vendors */}
+                    <td className="px-4 py-4 text-ink/45">—</td>
+                    <td className="px-4 py-4 text-right tabular-nums text-ink/45">—</td>
+                    <td className="px-4 py-4 text-right font-bold tabular-nums text-ink/45">—</td>
+                    <td className="px-4 py-4">
+                      <span className={`inline-block rounded-full px-3 py-1 text-xs font-bold ${statusPill[label]}`}>{label}</span>
+                    </td>
+                    <td className="px-4 py-4 text-right">
+                      <button onClick={() => router.push(`/vendors/${v.id}`)} className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-xs font-bold text-white transition-opacity hover:opacity-90">
+                        <Icon name="eye" size={15} /> View
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
               {rows.length === 0 && (
                 <tr><td colSpan={7} className="py-12 text-center text-sm text-ink/45">No vendors match your filters.</td></tr>
               )}

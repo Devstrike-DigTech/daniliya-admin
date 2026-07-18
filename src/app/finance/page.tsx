@@ -1,12 +1,51 @@
 import type { Metadata } from "next";
 import Icon from "@/components/Icon";
-import { financeStats, financeSeries } from "@/lib/dashboard";
+import { apiFetchSafe } from "@/lib/api";
 
 export const metadata: Metadata = { title: "Finance" };
 
-export default function FinancePage() {
-  const peak = Math.max(...financeSeries.map((d) => Math.max(d.revenue, d.profit)));
-  const gridLines = [0, 0.25, 0.5, 0.75, 1];
+type FinanceStats = {
+  totalPaidOut: string;
+  commissionsDisbursed: string;
+  commissionsOwed: string;
+};
+
+type Reconciliation = {
+  ledgerNet: string;
+  walletTotal: string;
+  drift: string;
+  balanced: boolean;
+};
+
+const naira = (v: string | number) =>
+  `₦${Number(v).toLocaleString("en-NG", { maximumFractionDigits: 0 })}`;
+
+export default async function FinancePage() {
+  const [stats, recon] = await Promise.all([
+    apiFetchSafe<FinanceStats>("/admin/finance/stats"),
+    apiFetchSafe<Reconciliation>("/admin/payouts/reconciliation"),
+  ]);
+
+  const cards = [
+    {
+      label: "Commissions disbursed",
+      value: stats ? naira(stats.commissionsDisbursed) : "—",
+      sub: "Paid to affiliates, creators and vendors",
+      accent: "bg-green-500",
+    },
+    {
+      label: "Commissions owed",
+      value: stats ? naira(stats.commissionsOwed) : "—",
+      sub: "Accrued and not yet disbursed",
+      accent: "bg-amber-500",
+    },
+    {
+      label: "Ledger drift",
+      value: recon ? naira(recon.drift) : "—",
+      sub: recon ? (recon.balanced ? "Ledger balanced against wallets" : "Drift detected — investigate") : "Reconciliation unavailable",
+      accent: recon?.balanced === false ? "bg-red-500" : "bg-[#6d3fa0]",
+    },
+  ];
 
   return (
     <>
@@ -22,11 +61,12 @@ export default function FinancePage() {
 
       <div className="mt-6 grid gap-4 lg:grid-cols-3">
         <div className="rounded-2xl bg-coal p-6 text-white">
-          <p className="text-sm text-white/60">Total Revenue</p>
-          <p className="mt-2 text-[28px] font-bold leading-none">₦12,180,000</p>
-          <p className="mt-2 text-sm font-bold text-green-400">+24%</p>
+          <p className="text-sm text-white/60">Total paid out</p>
+          <p className="mt-2 text-[28px] font-bold leading-none">{stats ? naira(stats.totalPaidOut) : "—"}</p>
+          {/* No period-over-period growth figure in /admin/finance/stats. */}
+          <p className="mt-2 text-sm font-bold text-white/40">—</p>
         </div>
-        {financeStats.map((s) => (
+        {cards.map((s) => (
           <div key={s.label} className="overflow-hidden rounded-2xl border border-ink/10 bg-white">
             <div className="p-6">
               <p className="text-sm text-ink/55">{s.label}</p>
@@ -38,7 +78,7 @@ export default function FinancePage() {
         ))}
       </div>
 
-      {/* Revenue vs Profits chart */}
+      {/* Revenue vs Profits — no time-series endpoint on the API yet. */}
       <div className="mt-6 rounded-2xl border border-ink/10 bg-white p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="font-bold">Revenue vs Profits in the last 7 days</p>
@@ -48,34 +88,8 @@ export default function FinancePage() {
           </div>
         </div>
 
-        <div className="mt-6 flex gap-4">
-          <div className="flex h-64 flex-col justify-between py-1 text-right text-[11px] text-ink/40">
-            {[...gridLines].reverse().map((g) => (
-              <span key={g}>₦{(peak * g * 0.04).toFixed(1)}M</span>
-            ))}
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="relative h-64">
-              <div className="absolute inset-0 flex flex-col justify-between">
-                {gridLines.map((g) => (
-                  <div key={g} className="border-t border-dashed border-ink/8" />
-                ))}
-              </div>
-              <div className="absolute inset-0 flex items-stretch gap-4">
-                {financeSeries.map((d) => (
-                  <div key={d.day} className="flex h-full flex-1 items-end justify-center gap-1.5">
-                    <div className="w-1/2 rounded-t-lg bg-brand" style={{ height: `${(d.revenue / peak) * 100}%` }} title={`Revenue ₦${(d.revenue * 0.04).toFixed(1)}M`} />
-                    <div className="w-1/2 rounded-t-lg bg-coal" style={{ height: `${(d.profit / peak) * 100}%` }} title={`Profit ₦${(d.profit * 0.04).toFixed(1)}M`} />
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="mt-2 flex gap-4">
-              {financeSeries.map((d) => (
-                <span key={d.day} className="flex-1 text-center text-xs text-ink/45">{d.day}</span>
-              ))}
-            </div>
-          </div>
+        <div className="mt-6 flex h-64 items-center justify-center rounded-xl border border-dashed border-ink/12 text-sm text-ink/45">
+          No revenue time-series available from the API yet.
         </div>
       </div>
     </>

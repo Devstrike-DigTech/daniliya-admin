@@ -1,11 +1,26 @@
 import type { Metadata } from "next";
 import Icon from "@/components/Icon";
 import { PageHead } from "@/components/widgets";
-import { auditLog } from "@/lib/dashboard";
+import { apiFetchSafe } from "@/lib/api";
 
 export const metadata: Metadata = { title: "Audit Log" };
 
-export default function AuditLogPage() {
+type AuditEntry = { actor: string; action: string; target: string; at: string };
+type AuditPage = { data: AuditEntry[]; meta: { page: number; limit: number; total: number } };
+
+const stamp = (v: string) =>
+  new Date(v).toLocaleString("en-NG", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+export default async function AuditLogPage() {
+  const res = await apiFetchSafe<AuditPage>("/admin/audit-log?limit=50");
+  const entries = res?.data ?? [];
+
   return (
     <>
       <PageHead title="Audit log" subtitle="Immutable record of every administrative action" />
@@ -34,21 +49,29 @@ export default function AuditLogPage() {
                 <th className="px-4 py-3.5 font-bold">Actor</th>
                 <th className="px-4 py-3.5 font-bold">Action</th>
                 <th className="px-4 py-3.5 font-bold">Target</th>
+                {/* The API does not return an IP on audit entries. */}
                 <th className="px-4 py-3.5 font-bold">IP Address</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-ink/8">
-              {auditLog.map((e, i) => (
-                <tr key={i} className="hover:bg-ink/[0.02]">
-                  <td className="py-4 pr-4 text-ink/70">{e.time}</td>
+              {entries.map((e, i) => (
+                <tr key={`${e.at}-${i}`} className="hover:bg-ink/[0.02]">
+                  <td className="py-4 pr-4 text-ink/70">{stamp(e.at)}</td>
                   <td className="px-4 py-4 font-bold">{e.actor}</td>
                   <td className="px-4 py-4">
                     <span className="inline-block rounded-full bg-brand/12 px-3 py-1 text-xs font-bold text-brand">{e.action}</span>
                   </td>
                   <td className="px-4 py-4 text-ink/70">{e.target}</td>
-                  <td className="px-4 py-4 font-mono text-xs text-ink/55">{e.ip}</td>
+                  <td className="px-4 py-4 font-mono text-xs text-ink/55">—</td>
                 </tr>
               ))}
+              {entries.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="py-12 text-center text-sm text-ink/45">
+                    No audit entries yet.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

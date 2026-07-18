@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
-import BookingsView from "./BookingsView";
+import { apiFetchSafe } from "@/lib/api";
+import BookingsView, { type AdminBooking } from "./BookingsView";
 
 export const metadata: Metadata = { title: "Bookings" };
 
-export default function BookingsPage() {
-  return <BookingsView />;
+export default async function BookingsPage() {
+  const bookings = await apiFetchSafe<AdminBooking[]>("/admin/bookings");
+  return <BookingsView bookings={bookings ?? []} />;
 }

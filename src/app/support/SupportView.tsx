@@ -1,51 +1,71 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import Icon from "@/components/Icon";
 
-type Msg = { from: string; admin?: boolean; time: string; text: string; initials: string };
-type Ticket = {
-  id: string;
+export type TicketSummary = {
+  ref: string;
   subject: string;
+  priority: string;
+  status: string;
+  updatedAt: string;
   from: string;
-  assigned: string;
-  priority: "Urgent" | "High" | "Medium";
-  messages: Msg[];
 };
 
-const TICKETS: Ticket[] = [
-  {
-    id: "TCK-2201", subject: "Payout didn't hit my bank", from: "Kelechi N.", assigned: "Ops · Ade", priority: "Urgent",
-    messages: [
-      { from: "Kelechi N.", time: "8:12 AM", initials: "KN", text: "My Monday payout of ₦42,000 didn't hit my Access bank account. Can you check the transfer log?" },
-      { from: "Ade", admin: true, time: "12 May, 16:11", initials: "AD", text: "Checking now — I can see the transfer was queued but failed at Paystack. Retrying immediately." },
-    ],
-  },
-  {
-    id: "TCK-2202", subject: "Product rejected — why?", from: "Sparkle & Co.", assigned: "Ops · Ade", priority: "High",
-    messages: [
-      { from: "Sparkle & Co.", time: "9:40 AM", initials: "SC", text: "Our Wooden frame mirror was rejected. What needs fixing before we resubmit?" },
-      { from: "Ade", admin: true, time: "12 May, 10:02", initials: "AD", text: "The product images didn't meet the white-background policy. Re-upload and we'll fast-track review." },
-    ],
-  },
-  {
-    id: "TCK-2203", subject: "Can't join campaign", from: "Emeka O.", assigned: "Support · Ify", priority: "Medium",
-    messages: [
-      { from: "Emeka O.", time: "Yesterday", initials: "EO", text: "The Handbook Push campaign won't let me join — it says I'm not eligible." },
-      { from: "Ify", admin: true, time: "Yesterday", initials: "IF", text: "That campaign is Gold-tier and above. You're currently NIL tier — hit 25 conversions to qualify." },
-    ],
-  },
-];
+export type ThreadMessage = { fromAdmin: boolean; body: string; at: string };
+
+export type TicketThread = {
+  ref: string;
+  subject: string;
+  priority: string;
+  status: string;
+  updatedAt: string;
+  messages: ThreadMessage[];
+};
 
 const priorityPill: Record<string, string> = {
-  Urgent: "bg-orange-100 text-orange-700",
-  High: "bg-amber-100 text-amber-700",
-  Medium: "bg-ink/8 text-ink/60",
+  URGENT: "bg-orange-100 text-orange-700",
+  HIGH: "bg-amber-100 text-amber-700",
+  NORMAL: "bg-ink/8 text-ink/60",
+  LOW: "bg-ink/8 text-ink/60",
 };
 
-export default function SupportView() {
-  const [active, setActive] = useState(0);
-  const t = TICKETS[active];
+const titled = (v: string) => v.charAt(0) + v.slice(1).toLowerCase();
+
+const initialsOf = (name: string) =>
+  name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase() ?? "")
+    .join("") || "?";
+
+const stamp = (v: string) =>
+  new Date(v).toLocaleString("en-NG", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+export default function SupportView({
+  tickets,
+  thread,
+}: {
+  tickets: TicketSummary[];
+  thread: TicketThread | null;
+}) {
+  const router = useRouter();
+  const [query, setQuery] = useState("");
+
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return tickets.filter((t) => !q || `${t.ref} ${t.subject} ${t.from}`.toLowerCase().includes(q));
+  }, [tickets, query]);
+
+  const active = thread ? tickets.find((t) => t.ref === thread.ref) : undefined;
+  const senderName = active?.from ?? "Customer";
 
   return (
     <>
@@ -56,53 +76,70 @@ export default function SupportView() {
         {/* Ticket list */}
         <div className="rounded-2xl border border-ink/10 bg-white p-4">
           <div className="relative">
-            <input placeholder="Search tickets" className="h-11 w-full rounded-xl border border-ink/15 bg-white pl-4 pr-12 text-sm outline-none transition-colors placeholder:text-ink/40 focus:border-brand" />
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search tickets" className="h-11 w-full rounded-xl border border-ink/15 bg-white pl-4 pr-12 text-sm outline-none transition-colors placeholder:text-ink/40 focus:border-brand" />
             <span className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-brand/15 text-brand"><Icon name="search" size={15} /></span>
           </div>
           <div className="mt-3 space-y-2">
-            {TICKETS.map((tk, i) => (
+            {visible.map((tk) => (
               <button
-                key={tk.id}
-                onClick={() => setActive(i)}
-                className={`w-full rounded-xl border p-4 text-left transition-colors ${i === active ? "border-brand bg-brand/[0.05]" : "border-ink/10 hover:bg-ink/[0.02]"}`}
+                key={tk.ref}
+                onClick={() => router.push(`/support?ref=${encodeURIComponent(tk.ref)}`)}
+                className={`w-full rounded-xl border p-4 text-left transition-colors ${tk.ref === thread?.ref ? "border-brand bg-brand/[0.05]" : "border-ink/10 hover:bg-ink/[0.02]"}`}
               >
-                <p className="text-xs text-ink/45">{tk.id}</p>
+                <p className="text-xs text-ink/45">{tk.ref}</p>
                 <p className="mt-0.5 font-bold">{tk.subject}</p>
-                <p className="text-xs text-ink/50">{tk.from} · assigned to {tk.assigned}</p>
-                <span className={`mt-2 inline-block rounded-full px-3 py-1 text-xs font-bold ${priorityPill[tk.priority]}`}>{tk.priority}</span>
+                {/* The list endpoint returns no assignee. */}
+                <p className="text-xs text-ink/50">{tk.from} · {titled(tk.status)}</p>
+                <span className={`mt-2 inline-block rounded-full px-3 py-1 text-xs font-bold ${priorityPill[tk.priority] ?? "bg-ink/8 text-ink/60"}`}>{titled(tk.priority)}</span>
               </button>
             ))}
+            {visible.length === 0 && (
+              <p className="px-2 py-8 text-center text-sm text-ink/45">No tickets match.</p>
+            )}
           </div>
         </div>
 
         {/* Conversation */}
         <div className="rounded-2xl border border-ink/10 bg-white p-6">
-          <div className="flex flex-wrap items-start justify-between gap-3 border-b border-ink/8 pb-5">
-            <div>
-              <p className="text-xs text-ink/45">{t.id}</p>
-              <p className="mt-0.5 text-lg font-bold">{t.subject}</p>
-              <p className="text-sm text-ink/50">{t.from} · assigned to {t.assigned}</p>
-            </div>
-            <span className={`rounded-full px-3 py-1 text-xs font-bold ${priorityPill[t.priority]}`}>{t.priority}</span>
-          </div>
-
-          <div className="space-y-6 py-6">
-            {t.messages.map((m, i) => (
-              <div key={i} className={`flex gap-3 ${m.admin ? "flex-row-reverse" : ""}`}>
-                <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold ${m.admin ? "bg-[#6d3fa0] text-white" : "bg-brand/15 text-brand"}`}>{m.initials}</span>
-                <div className={`max-w-[80%] ${m.admin ? "text-right" : ""}`}>
-                  <p className="text-sm">
-                    <span className="font-bold">{m.from}</span>{" "}
-                    <span className="text-ink/45">{m.admin ? "Admin · " : ""}{m.time}</span>
-                  </p>
-                  <div className={`mt-1.5 rounded-xl px-4 py-3 text-sm ${m.admin ? "bg-brand/[0.06]" : "bg-ink/[0.04]"}`}>{m.text}</div>
+          {thread ? (
+            <>
+              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-ink/8 pb-5">
+                <div>
+                  <p className="text-xs text-ink/45">{thread.ref}</p>
+                  <p className="mt-0.5 text-lg font-bold">{thread.subject}</p>
+                  {/* No assignee field on the ticket payload. */}
+                  <p className="text-sm text-ink/50">{senderName} · {titled(thread.status)}</p>
                 </div>
+                <span className={`rounded-full px-3 py-1 text-xs font-bold ${priorityPill[thread.priority] ?? "bg-ink/8 text-ink/60"}`}>{titled(thread.priority)}</span>
               </div>
-            ))}
-          </div>
 
-          <textarea placeholder="Type a reply" className="min-h-[90px] w-full rounded-xl border border-ink/15 bg-white px-4 py-3 text-sm outline-none transition-colors placeholder:text-ink/40 focus:border-brand" />
-          <button className="mt-4 rounded-xl bg-green-600 px-6 py-3 text-sm font-bold text-white transition-opacity hover:opacity-90">Mark as resolved</button>
+              <div className="space-y-6 py-6">
+                {thread.messages.map((m, i) => {
+                  const who = m.fromAdmin ? "Admin" : senderName;
+                  return (
+                    <div key={i} className={`flex gap-3 ${m.fromAdmin ? "flex-row-reverse" : ""}`}>
+                      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold ${m.fromAdmin ? "bg-[#6d3fa0] text-white" : "bg-brand/15 text-brand"}`}>{initialsOf(who)}</span>
+                      <div className={`max-w-[80%] ${m.fromAdmin ? "text-right" : ""}`}>
+                        <p className="text-sm">
+                          <span className="font-bold">{who}</span>{" "}
+                          <span className="text-ink/45">{m.fromAdmin ? "Admin · " : ""}{stamp(m.at)}</span>
+                        </p>
+                        <div className={`mt-1.5 rounded-xl px-4 py-3 text-sm ${m.fromAdmin ? "bg-brand/[0.06]" : "bg-ink/[0.04]"}`}>{m.body}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {thread.messages.length === 0 && (
+                  <p className="py-6 text-center text-sm text-ink/45">No messages on this ticket.</p>
+                )}
+              </div>
+
+              <textarea placeholder="Type a reply" className="min-h-[90px] w-full rounded-xl border border-ink/15 bg-white px-4 py-3 text-sm outline-none transition-colors placeholder:text-ink/40 focus:border-brand" />
+              <button className="mt-4 rounded-xl bg-green-600 px-6 py-3 text-sm font-bold text-white transition-opacity hover:opacity-90">Mark as resolved</button>
+            </>
+          ) : (
+            <p className="py-20 text-center text-sm text-ink/45">Select a ticket to view the conversation.</p>
+          )}
         </div>
       </div>
     </>

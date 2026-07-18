@@ -3,11 +3,30 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Icon from "@/components/Icon";
-import { influencers, influencerSummary } from "@/lib/dashboard";
+
+/** Shape returned by GET /admin/influencers. */
+export type InfluencerRow = {
+  id: string;
+  userId: string;
+  influencerCode: string;
+  socialHandles: Record<string, string> | null;
+  niche: string | null;
+  followerCount: number | null;
+  contentLinks: string[];
+  isApproved: boolean;
+  approvedAt: string | null;
+  rejectedReason: string | null;
+  createdAt: string;
+  user: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    status: string;
+  };
+};
 
 const initials = (n: string) => n.split(" ").map((p) => p[0]).join("").slice(0, 2);
 const STATUSES = ["All", "Pending", "Approved", "Rejected"] as const;
-const NICHES = ["All", ...Array.from(new Set(influencers.map((i) => i.niche)))];
 
 const statusPill: Record<string, string> = {
   Approved: "bg-green-100 text-green-700",
@@ -15,26 +34,54 @@ const statusPill: Record<string, string> = {
   Rejected: "bg-red-100 text-red-600",
 };
 
-export default function InfluencersView() {
+/** Derived: the API exposes isApproved + rejectedReason, not a status enum. */
+const reviewStatus = (i: InfluencerRow) =>
+  i.isApproved ? "Approved" : i.rejectedReason ? "Rejected" : "Pending";
+
+/** First social handle, e.g. { instagram: "@in" } → "@in". */
+const primaryHandle = (i: InfluencerRow) => Object.values(i.socialHandles ?? {})[0] ?? "";
+
+export default function InfluencersView({ influencers }: { influencers: InfluencerRow[] }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<(typeof STATUSES)[number]>("All");
   const [niche, setNiche] = useState("All");
   const [filterOpen, setFilterOpen] = useState(false);
 
+  const niches = useMemo(
+    () => ["All", ...Array.from(new Set(influencers.map((i) => i.niche).filter((n): n is string => !!n)))],
+    [influencers],
+  );
+
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
     return influencers.filter((i) => {
-      const mq = !q || `${i.name} ${i.handle} ${i.code} ${i.email}`.toLowerCase().includes(q);
-      const ms = status === "All" || i.status === status;
+      const name = `${i.user.firstName} ${i.user.lastName}`;
+      const mq =
+        !q || `${name} ${primaryHandle(i)} ${i.influencerCode} ${i.user.email}`.toLowerCase().includes(q);
+      const ms = status === "All" || reviewStatus(i) === status;
       const mn = niche === "All" || i.niche === niche;
       return mq && ms && mn;
     });
-  }, [query, status, niche]);
+  }, [influencers, query, status, niche]);
+
+  // Derived from live rows. Payout totals have no field on /admin/influencers.
+  const activeCount = influencers.filter((i) => i.isApproved).length;
+  const awaitingCount = influencers.filter((i) => reviewStatus(i) === "Pending").length;
 
   const exportCsv = () => {
-    const header = ["Influencer", "Handle", "Code", "Followers", "Campaigns", "Earnings", "Status"];
-    const lines = rows.map((i) => [i.name, i.handle, i.code, i.followers, i.campaigns, i.earnings.replace(/,/g, ""), i.status].join(","));
+    const header = ["Influencer", "Handle", "Code", "Niche", "Followers", "Email", "Status"];
+    const lines = rows.map((i) =>
+      [
+        `${i.user.firstName} ${i.user.lastName}`,
+        primaryHandle(i),
+        i.influencerCode,
+        i.niche ?? "",
+        i.followerCount ?? "",
+        i.user.email,
+        reviewStatus(i),
+      ].join(","),
+    );
     const blob = new Blob([[header.join(","), ...lines].join("\n")], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -57,10 +104,11 @@ export default function InfluencersView() {
       </div>
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard label="Active Influencers" value={`${influencerSummary.active}`} icon="users" accent="bg-green-500" soft="bg-green-500/15 text-green-600" />
-        <SummaryCard label="Awaiting review" value={`${influencerSummary.awaiting}`} icon="clock" accent="bg-amber-500" soft="bg-amber-500/15 text-amber-600" />
-        <SummaryCard label="Pending payouts" value={influencerSummary.pendingPayouts} icon="wallet" accent="bg-orange-500" soft="bg-orange-500/15 text-orange-600" />
-        <SummaryCard label="Lifetime payouts" value={influencerSummary.lifetimePayouts} icon="wallet" accent="bg-blue-500" soft="bg-blue-500/15 text-blue-600" />
+        <SummaryCard label="Active Influencers" value={`${activeCount}`} icon="users" accent="bg-green-500" soft="bg-green-500/15 text-green-600" />
+        <SummaryCard label="Awaiting review" value={`${awaitingCount}`} icon="clock" accent="bg-amber-500" soft="bg-amber-500/15 text-amber-600" />
+        {/* No payout aggregate on /admin/influencers yet */}
+        <SummaryCard label="Pending payouts" value="—" icon="wallet" accent="bg-orange-500" soft="bg-orange-500/15 text-orange-600" />
+        <SummaryCard label="Lifetime payouts" value="—" icon="wallet" accent="bg-blue-500" soft="bg-blue-500/15 text-blue-600" />
       </div>
 
       <div className="mt-6 rounded-2xl border border-ink/10 bg-white p-5 sm:p-6">
@@ -90,7 +138,7 @@ export default function InfluencersView() {
                 <div className="absolute right-0 top-14 z-20 w-56 rounded-xl border border-ink/10 bg-white p-3 shadow-lg">
                   <p className="px-1 pb-2 text-xs font-bold uppercase tracking-wide text-ink/45">Niche</p>
                   <div className="max-h-64 space-y-1 overflow-y-auto">
-                    {NICHES.map((n) => (
+                    {niches.map((n) => (
                       <button
                         key={n}
                         onClick={() => { setNiche(n); setFilterOpen(false); }}
@@ -133,33 +181,40 @@ export default function InfluencersView() {
               </tr>
             </thead>
             <tbody className="divide-y divide-ink/8">
-              {rows.map((i) => (
-                <tr key={i.id} className="transition-colors hover:bg-ink/[0.02]">
-                  <td className="py-4 pr-4">
-                    <div className="flex items-center gap-3">
-                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand/15 text-sm font-bold text-brand">
-                        {initials(i.name)}
-                      </span>
-                      <div className="min-w-0">
-                        <p className="font-bold">{i.name}</p>
-                        <p className="truncate text-xs text-ink/45">{i.handle}</p>
+              {rows.map((i) => {
+                const name = `${i.user.firstName} ${i.user.lastName}`;
+                const label = reviewStatus(i);
+                return (
+                  <tr key={i.id} className="transition-colors hover:bg-ink/[0.02]">
+                    <td className="py-4 pr-4">
+                      <div className="flex items-center gap-3">
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand/15 text-sm font-bold text-brand">
+                          {initials(name)}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="font-bold">{name}</p>
+                          <p className="truncate text-xs text-ink/45">{primaryHandle(i) || i.user.email}</p>
+                        </div>
                       </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-4 font-mono text-xs text-ink/70">{i.code}</td>
-                  <td className="px-4 py-4 text-right tabular-nums">{i.followers}</td>
-                  <td className="px-4 py-4 text-right tabular-nums">{i.campaigns}</td>
-                  <td className="px-4 py-4 text-right font-bold tabular-nums">{i.earnings}</td>
-                  <td className="px-4 py-4">
-                    <span className={`inline-block rounded-full px-3 py-1 text-xs font-bold ${statusPill[i.status]}`}>{i.status}</span>
-                  </td>
-                  <td className="px-4 py-4 text-right">
-                    <button onClick={() => router.push(`/influencers/${i.id}`)} className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-xs font-bold text-white transition-opacity hover:opacity-90">
-                      <Icon name="eye" size={15} /> View
-                    </button>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="px-4 py-4 font-mono text-xs text-ink/70">{i.influencerCode}</td>
+                    <td className="px-4 py-4 text-right tabular-nums">
+                      {i.followerCount != null ? i.followerCount.toLocaleString() : <span className="text-ink/45">—</span>}
+                    </td>
+                    {/* campaigns / earnings: no field on /admin/influencers */}
+                    <td className="px-4 py-4 text-right tabular-nums text-ink/45">—</td>
+                    <td className="px-4 py-4 text-right font-bold tabular-nums text-ink/45">—</td>
+                    <td className="px-4 py-4">
+                      <span className={`inline-block rounded-full px-3 py-1 text-xs font-bold ${statusPill[label]}`}>{label}</span>
+                    </td>
+                    <td className="px-4 py-4 text-right">
+                      <button onClick={() => router.push(`/influencers/${i.id}`)} className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-xs font-bold text-white transition-opacity hover:opacity-90">
+                        <Icon name="eye" size={15} /> View
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
               {rows.length === 0 && (
                 <tr><td colSpan={7} className="py-12 text-center text-sm text-ink/45">No influencers match your filters.</td></tr>
               )}

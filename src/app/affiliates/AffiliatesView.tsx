@@ -1,41 +1,87 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Icon from "@/components/Icon";
-import { affiliates, affiliateSummary, type Affiliate, type AffiliateTier } from "@/lib/dashboard";
+
+/** Shape returned by GET /admin/affiliates. */
+export type AffiliateRow = {
+  id: string;
+  userId: string;
+  referralCode: string;
+  tier: string;
+  kycStatus: string;
+  assessmentPassed: boolean;
+  tutorialCompleted: boolean;
+  isActive: boolean;
+  createdAt: string;
+  user: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    status: string;
+  };
+};
 
 const initials = (n: string) => n.split(" ").map((p) => p[0]).join("").slice(0, 2);
 const STATUSES = ["All", "Approved", "Rejected"] as const;
-const TIERS: (AffiliateTier | "All")[] = ["All", "Gold", "Platinum", "NIL"];
 
-const tierStyle: Record<AffiliateTier, string> = {
-  Gold: "bg-brand/15 text-brand",
-  Platinum: "bg-[#6d3fa0]/12 text-[#6d3fa0]",
-  NIL: "bg-ink/8 text-ink/45",
+const title = (s: string) => s.charAt(0) + s.slice(1).toLowerCase();
+
+/** kycStatus (PENDING | APPROVED | REJECTED) drives the displayed standing. */
+const kycLabel = (s: string) => title(s);
+
+const tierStyle: Record<string, string> = {
+  GOLD: "bg-brand/15 text-brand",
+  PLATINUM: "bg-[#6d3fa0]/12 text-[#6d3fa0]",
+  SILVER: "bg-ink/8 text-ink/55",
+  BRONZE: "bg-orange-500/12 text-orange-600",
 };
 
-export default function AffiliatesView() {
+const tierIcon: Record<string, string> = {
+  PLATINUM: "trophy",
+  GOLD: "medal",
+};
+
+export default function AffiliatesView({ affiliates }: { affiliates: AffiliateRow[] }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<(typeof STATUSES)[number]>("All");
-  const [tier, setTier] = useState<(typeof TIERS)[number]>("All");
+  const [tier, setTier] = useState("All");
   const [filterOpen, setFilterOpen] = useState(false);
+
+  const tiers = useMemo(
+    () => ["All", ...Array.from(new Set(affiliates.map((a) => a.tier)))],
+    [affiliates],
+  );
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
     return affiliates.filter((a) => {
-      const mq = !q || `${a.name} ${a.code} ${a.id} ${a.email}`.toLowerCase().includes(q);
-      const ms = status === "All" || a.status === status;
+      const name = `${a.user.firstName} ${a.user.lastName}`;
+      const mq = !q || `${name} ${a.referralCode} ${a.id} ${a.user.email}`.toLowerCase().includes(q);
+      const ms = status === "All" || kycLabel(a.kycStatus) === status;
       const mt = tier === "All" || a.tier === tier;
       return mq && ms && mt;
     });
-  }, [query, status, tier]);
+  }, [affiliates, query, status, tier]);
+
+  // Derived from live rows. Payout totals have no field on /admin/affiliates.
+  const activeCount = affiliates.filter((a) => a.isActive).length;
+  const rejectedCount = affiliates.filter((a) => a.kycStatus === "REJECTED").length;
 
   const exportCsv = () => {
-    const header = ["Affiliate", "ID", "Code", "Tier", "Clicks", "Conv", "Earnings", "Status"];
+    const header = ["Affiliate", "ID", "Code", "Tier", "Email", "KYC status", "Active"];
     const lines = rows.map((a) =>
-      [a.name, a.id, a.code, a.tier, a.clicks, a.conv, a.earnings.replace(/,/g, ""), a.status].join(","),
+      [
+        `${a.user.firstName} ${a.user.lastName}`,
+        a.id,
+        a.referralCode,
+        a.tier,
+        a.user.email,
+        a.kycStatus,
+        a.isActive ? "Yes" : "No",
+      ].join(","),
     );
     const blob = new Blob([[header.join(","), ...lines].join("\n")], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
@@ -64,10 +110,11 @@ export default function AffiliatesView() {
 
       {/* Summary cards — bottom accent */}
       <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard label="Active Affiliates" value={`${affiliateSummary.active}`} icon="users" accent="bg-green-500" soft="bg-green-500/15 text-green-600" />
-        <SummaryCard label="Rejected affiliates" value={`${affiliateSummary.rejected}`} icon="users" accent="bg-red-500" soft="bg-red-500/15 text-red-500" />
-        <SummaryCard label="Pending payouts" value={affiliateSummary.pendingPayouts} icon="wallet" accent="bg-orange-500" soft="bg-orange-500/15 text-orange-600" />
-        <SummaryCard label="Lifetime payouts" value={affiliateSummary.lifetimePayouts} icon="wallet" accent="bg-blue-500" soft="bg-blue-500/15 text-blue-600" />
+        <SummaryCard label="Active Affiliates" value={`${activeCount}`} icon="users" accent="bg-green-500" soft="bg-green-500/15 text-green-600" />
+        <SummaryCard label="Rejected affiliates" value={`${rejectedCount}`} icon="users" accent="bg-red-500" soft="bg-red-500/15 text-red-500" />
+        {/* No payout aggregate on /admin/affiliates yet */}
+        <SummaryCard label="Pending payouts" value="—" icon="wallet" accent="bg-orange-500" soft="bg-orange-500/15 text-orange-600" />
+        <SummaryCard label="Lifetime payouts" value="—" icon="wallet" accent="bg-blue-500" soft="bg-blue-500/15 text-blue-600" />
       </div>
 
       {/* Container card */}
@@ -100,8 +147,8 @@ export default function AffiliatesView() {
                 <div className="fixed inset-0 z-10" onClick={() => setFilterOpen(false)} />
                 <div className="absolute right-0 top-14 z-20 w-56 rounded-xl border border-ink/10 bg-white p-3 shadow-lg">
                   <p className="px-1 pb-2 text-xs font-bold uppercase tracking-wide text-ink/45">Tier</p>
-                  <div className="space-y-1">
-                    {TIERS.map((t) => (
+                  <div className="max-h-64 space-y-1 overflow-y-auto">
+                    {tiers.map((t) => (
                       <button
                         key={t}
                         onClick={() => {
@@ -112,7 +159,7 @@ export default function AffiliatesView() {
                           tier === t ? "bg-brand/10 text-brand" : "text-ink/70 hover:bg-ink/5"
                         }`}
                       >
-                        {t}
+                        {t === "All" ? t : title(t)}
                         {tier === t && <Icon name="check" size={15} />}
                       </button>
                     ))}
@@ -154,41 +201,50 @@ export default function AffiliatesView() {
               </tr>
             </thead>
             <tbody className="divide-y divide-ink/8">
-              {rows.map((a) => (
-                <tr key={a.id} className="transition-colors hover:bg-ink/[0.02]">
-                  <td className="py-4 pr-4">
-                    <div className="flex items-center gap-3">
-                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand/15 text-sm font-bold text-brand">
-                        {initials(a.name)}
-                      </span>
-                      <div className="min-w-0">
-                        <p className="font-bold">{a.name}</p>
-                        <p className="truncate text-xs text-ink/45">{a.id} · {a.bank}</p>
+              {rows.map((a) => {
+                const name = `${a.user.firstName} ${a.user.lastName}`;
+                const label = kycLabel(a.kycStatus);
+                return (
+                  <tr key={a.id} className="transition-colors hover:bg-ink/[0.02]">
+                    <td className="py-4 pr-4">
+                      <div className="flex items-center gap-3">
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand/15 text-sm font-bold text-brand">
+                          {initials(name)}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="font-bold">{name}</p>
+                          <p className="truncate text-xs text-ink/45">{a.user.email}</p>
+                        </div>
                       </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-4 font-mono text-xs text-ink/70">{a.code}</td>
-                  <td className="px-4 py-4"><TierBadge tier={a.tier} /></td>
-                  <td className="px-4 py-4 text-right tabular-nums">{a.clicks.toLocaleString()}</td>
-                  <td className="px-4 py-4 text-right tabular-nums">{a.conv}</td>
-                  <td className="px-4 py-4 text-right font-bold tabular-nums">{a.earnings}</td>
-                  <td className="px-4 py-4">
-                    <span className={`inline-block rounded-full px-3 py-1 text-xs font-bold ${
-                      a.status === "Approved" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"
-                    }`}>
-                      {a.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-4 text-right">
-                    <button
-                      onClick={() => router.push(`/affiliates/${a.id}`)}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-xs font-bold text-white transition-opacity hover:opacity-90"
-                    >
-                      <Icon name="eye" size={15} /> View
-                    </button>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="px-4 py-4 font-mono text-xs text-ink/70">{a.referralCode}</td>
+                    <td className="px-4 py-4"><TierBadge tier={a.tier} /></td>
+                    {/* clicks / conv / earnings: no field on /admin/affiliates */}
+                    <td className="px-4 py-4 text-right tabular-nums text-ink/45">—</td>
+                    <td className="px-4 py-4 text-right tabular-nums text-ink/45">—</td>
+                    <td className="px-4 py-4 text-right font-bold tabular-nums text-ink/45">—</td>
+                    <td className="px-4 py-4">
+                      <span className={`inline-block rounded-full px-3 py-1 text-xs font-bold ${
+                        label === "Approved"
+                          ? "bg-green-100 text-green-700"
+                          : label === "Rejected"
+                            ? "bg-red-100 text-red-600"
+                            : "bg-amber-100 text-amber-700"
+                      }`}>
+                        {label}
+                      </span>
+                    </td>
+                    <td className="px-4 py-4 text-right">
+                      <button
+                        onClick={() => router.push(`/affiliates/${a.id}`)}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-xs font-bold text-white transition-opacity hover:opacity-90"
+                      >
+                        <Icon name="eye" size={15} /> View
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
               {rows.length === 0 && (
                 <tr>
                   <td colSpan={8} className="py-12 text-center text-sm text-ink/45">
@@ -221,13 +277,15 @@ function SummaryCard({ label, value, icon, accent, soft }: { label: string; valu
   );
 }
 
-function TierBadge({ tier }: { tier: AffiliateTier }) {
-  if (tier === "NIL") {
-    return <span className="inline-block rounded-full bg-ink/8 px-3 py-1 text-xs font-bold text-ink/45">NIL</span>;
+function TierBadge({ tier }: { tier: string }) {
+  const style = tierStyle[tier];
+  if (!style) {
+    return <span className="inline-block rounded-full bg-ink/8 px-3 py-1 text-xs font-bold text-ink/45">{title(tier)}</span>;
   }
+  const icon = tierIcon[tier];
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold ${tierStyle[tier]}`}>
-      <Icon name={tier === "Platinum" ? "trophy" : "medal"} size={13} /> {tier}
+    <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold ${style}`}>
+      {icon && <Icon name={icon} size={13} />} {title(tier)}
     </span>
   );
 }
