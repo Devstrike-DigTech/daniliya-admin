@@ -2,10 +2,26 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import Icon from "@/components/Icon";
-import { admin, navGroups } from "@/lib/dashboard";
+import { navGroups } from "@/lib/dashboard";
+
+/** GET /auth/me — the fields the shell chrome needs. */
+export type ShellUser = {
+  firstName: string;
+  lastName: string;
+  role: string;
+};
+
+const displayName = (u: ShellUser | null) =>
+  u ? `${u.firstName} ${u.lastName}`.trim() : "—";
+
+const initials = (u: ShellUser | null) =>
+  u ? `${u.firstName[0] ?? ""}${u.lastName[0] ?? ""}`.toUpperCase() : "";
+
+const roleLabel = (u: ShellUser | null) =>
+  u ? u.role.charAt(0) + u.role.slice(1).toLowerCase().replace(/_/g, " ") : "";
 
 function NavGroups({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
@@ -49,16 +65,33 @@ function NavGroups({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
-function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
+function SidebarBody({
+  user,
+  onNavigate,
+}: {
+  user: ShellUser | null;
+  onNavigate?: () => void;
+}) {
+  const router = useRouter();
+  const [signingOut, setSigningOut] = useState(false);
+
+  // Clears both httpOnly cookies and revokes the refresh token server-side.
+  const signOut = async () => {
+    setSigningOut(true);
+    await fetch("/api/auth/logout", { method: "POST" }).catch(() => undefined);
+    router.replace("/login");
+    router.refresh();
+  };
+
   return (
     <div className="flex h-full flex-col p-4">
       <div className="flex items-center gap-3 rounded-2xl bg-coal p-4 text-white">
         <span className="flex h-11 w-11 items-center justify-center rounded-full bg-brand text-sm font-bold text-ink">
-          {admin.initials}
+          {initials(user)}
         </span>
         <div className="min-w-0">
-          <p className="truncate text-sm font-bold">{admin.name}</p>
-          <p className="text-xs capitalize text-brand">{admin.role}</p>
+          <p className="truncate text-sm font-bold">{displayName(user)}</p>
+          <p className="text-xs text-brand">{roleLabel(user)}</p>
         </div>
       </div>
 
@@ -66,19 +99,22 @@ function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
         <NavGroups onNavigate={onNavigate} />
       </div>
 
-      <a
-        href="/login"
-        className="mt-4 flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-red-500 transition-colors hover:bg-red-50"
+      <button
+        onClick={signOut}
+        disabled={signingOut}
+        className="mt-4 flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-red-500 transition-colors hover:bg-red-50 disabled:opacity-60"
       >
-        <Icon name="logout" size={18} /> Sign out
-      </a>
+        <Icon name="logout" size={18} /> {signingOut ? "Signing out…" : "Sign out"}
+      </button>
     </div>
   );
 }
 
 export default function DashboardShell({
+  user,
   children,
 }: {
+  user: ShellUser | null;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -127,11 +163,11 @@ export default function DashboardShell({
           </button>
           <Link href="/settings" className="flex items-center gap-2.5">
             <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand text-xs font-bold text-ink">
-              {admin.initials}
+              {initials(user)}
             </span>
             <span className="hidden text-left sm:block">
-              <span className="block text-sm font-bold leading-tight">{admin.name}</span>
-              <span className="block text-xs capitalize text-white/55">{admin.role}</span>
+              <span className="block text-sm font-bold leading-tight">{displayName(user)}</span>
+              <span className="block text-xs text-white/55">{roleLabel(user)}</span>
             </span>
           </Link>
         </div>
@@ -140,7 +176,7 @@ export default function DashboardShell({
       <div className="flex flex-1">
         {/* Desktop sidebar */}
         <aside className="sticky top-16 hidden h-[calc(100vh-4rem)] w-[248px] shrink-0 border-r border-ink/10 bg-white lg:block">
-          <SidebarBody />
+          <SidebarBody user={user} />
         </aside>
 
         {/* Mobile drawer */}
@@ -148,7 +184,7 @@ export default function DashboardShell({
           <div className="fixed inset-0 z-50 lg:hidden">
             <div className="absolute inset-0 bg-ink/40" onClick={() => setOpen(false)} />
             <aside className="absolute left-0 top-0 h-full w-[280px] bg-white shadow-xl">
-              <SidebarBody onNavigate={() => setOpen(false)} />
+              <SidebarBody user={user} onNavigate={() => setOpen(false)} />
             </aside>
           </div>
         )}

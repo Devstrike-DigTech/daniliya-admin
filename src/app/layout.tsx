@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { DM_Sans } from "next/font/google";
-import DashboardShell from "@/components/DashboardShell";
+import DashboardShell, { type ShellUser } from "@/components/DashboardShell";
+import { apiFetchSafe } from "@/lib/api";
 import "./globals.css";
 
 // Fallback until the real Product Sans files are dropped in public/fonts/.
@@ -19,13 +20,16 @@ export const metadata: Metadata = {
     "The Daniliya operations console — manage affiliates, influencers, vendors, orders, payouts and finance.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  // Null on the auth pages (no cookie yet) — the shell isn't rendered there anyway.
+  const me = await apiFetchSafe<ShellUser>("/auth/me");
+
   return (
     <html lang="en" className={`${dmSans.variable} h-full antialiased`}>
       <body className="min-h-full">
-        <DashboardShell>{children}</DashboardShell>
+        <DashboardShell user={me}>{children}</DashboardShell>
       </body>
     </html>
   );

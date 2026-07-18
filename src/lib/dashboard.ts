@@ -1,12 +1,6 @@
 // Dummy data for the Daniliya admin portal (the platform command centre).
 // Admins oversee marketplace, services, affiliates, influencers and payouts.
 
-export const admin = {
-  name: "Samuel Iliya",
-  role: "superadmin",
-  initials: "SI",
-};
-
 export const currentUser = {
   firstName: "Jane",
   initials: "JF",
@@ -405,85 +399,7 @@ export const bookings = [
 ];
 
 /* ── Growth / Money ──────────────────────────────────────── */
-export type CampaignStatus = "Live" | "Scheduled" | "Draft" | "Paused" | "Ended";
-export type CampaignScope = "Platform" | "Vendor";
-
-export const adminCampaigns = [
-  {
-    id: "CMP-A21", scope: "Platform" as CampaignScope, name: "Handbook Push · Q3", title: "Marketplace commission",
-    product: "Daniliya Books", type: "CPA", status: "Live" as CampaignStatus,
-    spent: 812000, budget: 2000000, conversions: 412, windowStart: "2026-06-15", windowEnd: "2026-07-30",
-    briefHeadline: "Nigeria's #1 practical builder playbook — real numbers, real stories.",
-    briefSub: "Drive 1,000 net-new Handbook sales in Q3 via affiliate creators tier Gold and above.",
-    totalSales: 200, revenue: "₦255,500", creators: 100, postsLive: 148,
-    utm: "https://daniliya.ng/products/builders-handbook?utm_source=influencer&utm_campaign=jun-book&via=ADA",
-    promo: "BUILD-ADA",
-    checklist: ["Download brand assets", "Add UTM link to bio / pinned comment", "Mention promo code on camera", "Publish post within campaign window", "Submit proof of post to Daniliya"],
-    deliverables: ["1× Instagram Reel (45–60s)", "3× WhatsApp Status frames", "1× X / Twitter thread (5 posts)"],
-    assets: ["Hero image", "Story frame", "Carousel pack", "Caption pack", "Caption pack"],
-  },
-  {
-    id: "CMP-A22", scope: "Vendor" as CampaignScope, name: "Sparkle Spring Sale", title: "Marketplace commission",
-    product: "Sparkle & Co.", type: "Hybrid", status: "Scheduled" as CampaignStatus,
-    spent: 0, budget: 1500000, conversions: 0, windowStart: "2026-06-15", windowEnd: "2026-07-30",
-    briefHeadline: "Spring-clean every Lagos home with Sparkle.", briefSub: "Recruit lifestyle creators to drive first-time Sparkle orders.",
-    totalSales: 0, revenue: "₦0", creators: 0, postsLive: 0,
-    utm: "https://daniliya.ng/vendors/sparkle?utm_source=influencer&utm_campaign=spring", promo: "SPARKLE-10",
-    checklist: ["Download brand assets", "Add UTM link to bio", "Publish within window", "Submit proof"],
-    deliverables: ["1× Instagram Reel (30s)", "2× Story frames"],
-    assets: ["Hero image", "Story frame"],
-  },
-  {
-    id: "CMP-A23", scope: "Platform" as CampaignScope, name: "Books Launch Teaser", title: "Marketplace commission",
-    product: "Daniliya Books", type: "CPA", status: "Draft" as CampaignStatus,
-    spent: 0, budget: 2000000, conversions: 0, windowStart: "2026-06-15", windowEnd: "2026-07-30",
-    briefHeadline: "Tease the next Daniliya bestseller.", briefSub: "Warm up the audience ahead of launch week.",
-    totalSales: 0, revenue: "₦0", creators: 0, postsLive: 0,
-    utm: "https://daniliya.ng/products/next-book?utm_source=influencer", promo: "TEASE-ADA",
-    checklist: ["Download brand assets", "Draft caption", "Submit for review"],
-    deliverables: ["1× Instagram Reel"], assets: ["Hero image"],
-  },
-  {
-    id: "CMP-A24", scope: "Platform" as CampaignScope, name: "Meal-Prep Momentum", title: "Marketplace commission",
-    product: "Naija Eats", type: "CPA", status: "Live" as CampaignStatus,
-    spent: 640000, budget: 1200000, conversions: 280, windowStart: "2026-06-15", windowEnd: "2026-07-30",
-    briefHeadline: "Fresh meals, zero prep.", briefSub: "Drive weekly meal-box subscriptions via food creators.",
-    totalSales: 140, revenue: "₦168,000", creators: 42, postsLive: 61,
-    utm: "https://daniliya.ng/vendors/naija-eats?utm_source=influencer", promo: "EATS-FRESH",
-    checklist: ["Download brand assets", "Add UTM link", "Publish within window", "Submit proof"],
-    deliverables: ["1× Instagram Reel", "2× Story frames"], assets: ["Hero image", "Story frame", "Carousel pack"],
-  },
-  {
-    id: "CMP-A25", scope: "Vendor" as CampaignScope, name: "Amber Ambience", title: "Marketplace commission",
-    product: "Amber & Oak", type: "Hybrid", status: "Scheduled" as CampaignStatus,
-    spent: 0, budget: 1500000, conversions: 0, windowStart: "2026-06-15", windowEnd: "2026-07-30",
-    briefHeadline: "Set the mood with Amber & Oak.", briefSub: "Home-fragrance creators drive first orders.",
-    totalSales: 0, revenue: "₦0", creators: 0, postsLive: 0,
-    utm: "https://daniliya.ng/vendors/amber-oak?utm_source=influencer", promo: "AMBER-08",
-    checklist: ["Download brand assets", "Publish within window", "Submit proof"],
-    deliverables: ["1× Instagram Reel"], assets: ["Hero image"],
-  },
-  {
-    id: "CMP-A26", scope: "Vendor" as CampaignScope, name: "Chairs Clearance", title: "Marketplace commission",
-    product: "Sofia Chairs", type: "CPA", status: "Draft" as CampaignStatus,
-    spent: 0, budget: 2000000, conversions: 0, windowStart: "2026-06-15", windowEnd: "2026-07-30",
-    briefHeadline: "Seats that sell themselves.", briefSub: "Furniture creators move end-of-line stock.",
-    totalSales: 0, revenue: "₦0", creators: 0, postsLive: 0,
-    utm: "https://daniliya.ng/vendors/sofia-chairs?utm_source=influencer", promo: "CHAIRS-15",
-    checklist: ["Download brand assets", "Submit for review"], deliverables: ["1× Instagram Reel"], assets: ["Hero image"],
-  },
-];
-
-export type AdminCampaign = (typeof adminCampaigns)[number];
-
-// Influencer post submissions shown on a campaign detail's "Post submissions" tab.
-export const campaignSubmissions = [
-  { influencer: "Balogun Tawio", followers: "23k" },
-  { influencer: "Jerome Bell", followers: "89k" },
-  { influencer: "Cameron Williamson", followers: "10k" },
-  { influencer: "Courtney Henry", followers: "1M" },
-  { influencer: "Savannah Nguyen", followers: "2.5M" },
-];
+// Campaign data now comes from GET /admin/campaigns — see src/app/campaigns.
 
 export type PayoutStatus = "Scheduled" | "Review" | "Paid" | "Failed";
 
@@ -536,14 +452,6 @@ export const auditLog = [
   { time: "2026-07-01 09:22", actor: "Ify Nnamdi", action: "Refunded Order", target: "ORD-40026 · ₦18,500", ip: "105.112.11.9" },
   { time: "2026-07-01 09:22", actor: "Dexter O.", action: "Rejected Affiliate", target: "AFF-1204 Emeka Obi", ip: "154.113.7.44" },
   { time: "2026-07-01 09:22", actor: "System", action: "Flagged Vendor", target: "RVW-9013", ip: "—" },
-];
-
-export const team = [
-  { name: "Samuel Iliya", email: "samuel@daniliya.ng", role: "Superadmin", lastActive: "just now" },
-  { name: "Ade Balogun", email: "ade@daniliya.ng", role: "Finance", lastActive: "3m ago" },
-  { name: "Ify Nnamdi", email: "ify@daniliya.ng", role: "Support", lastActive: "1h ago" },
-  { name: "Chiamaka Umeh", email: "chi@daniliya.ng", role: "Finance", lastActive: "yesterday" },
-  { name: "Marcus Danjuma", email: "marcus@daniliya.ng", role: "User manager", lastActive: "3d ago" },
 ];
 
 export const notificationSettings = [
