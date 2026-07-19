@@ -1,8 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
 import Icon from "@/components/Icon";
+import ActionButton from "@/components/ActionButton";
+import {
+  approveVendor,
+  messageVendor,
+  reinstateVendor,
+  rejectVendor,
+  suspendVendor,
+} from "../actions";
 
 /** Shape returned by GET /admin/vendors/{id}. */
 export type VendorDetailData = {
@@ -55,8 +63,15 @@ const statusChip: Record<string, string> = {
 
 export default function VendorDetail({ vendor: v }: { vendor: VendorDetailData }) {
   const [tab, setTab] = useState<(typeof TABS)[number]>("Overview");
+  const [messaging, setMessaging] = useState(false);
+  const [rejecting, setRejecting] = useState(false);
   const status = v.isApproved ? "Approved" : v.rejectedReason ? "Rejected" : "Pending";
-  const suspended = status === "Rejected" || v.user.status !== "ACTIVE";
+  /**
+   * Account standing is a separate axis from approval: a vendor can be approved
+   * yet suspended. Suspend/reinstate drive off User.status alone, and neither is
+   * offered for PENDING_VERIFICATION — the API rejects both for that state.
+   */
+  const userStatus = v.user.status;
   const takeRate = v.takeRateBps != null ? `${v.takeRateBps / 100}%` : EMPTY;
   const category = v.productCategory ?? EMPTY;
   const contactName = `${v.user.firstName} ${v.user.lastName}`;
@@ -71,9 +86,7 @@ export default function VendorDetail({ vendor: v }: { vendor: VendorDetailData }
             <p className="mt-0.5 text-sm text-ink/50">{v.id} · {category}</p>
           </div>
         </div>
-        <button className="inline-flex items-center gap-2 rounded-xl border border-brand px-5 py-3 text-sm font-bold text-brand transition-colors hover:bg-brand/10">
-          <Icon name="download" size={17} /> Export CSV
-        </button>
+        {/* No vendor export endpoint exists on the API, so no Export CSV button here. */}
       </div>
 
       {/* Hero */}
@@ -94,12 +107,40 @@ export default function VendorDetail({ vendor: v }: { vendor: VendorDetailData }
               </div>
             </div>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <button className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-bold transition-colors hover:bg-white/15"><Icon name="message" size={16} /> Message</button>
-            {suspended ? (
-              <button className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2.5 text-sm font-bold transition-opacity hover:opacity-90"><Icon name="check" size={16} /> Reinstate</button>
-            ) : (
-              <button className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-bold transition-opacity hover:opacity-90"><Icon name="ban" size={16} /> Suspend user</button>
+          <div className="flex flex-wrap items-start gap-2">
+            <button onClick={() => setMessaging(true)} className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-bold transition-colors hover:bg-white/15"><Icon name="message" size={16} /> Message</button>
+
+            {!v.isApproved && (
+              <ActionButton
+                action={() => approveVendor(v.id)}
+                icon="check"
+                variant="success"
+                confirm={`Approve ${v.businessName}? Their products become sellable on the platform.`}
+              >
+                Approve
+              </ActionButton>
+            )}
+            {!v.rejectedReason && (
+              <button onClick={() => setRejecting(true)} className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-bold transition-colors hover:bg-white/15"><Icon name="close" size={16} /> Reject</button>
+            )}
+
+            {userStatus === "ACTIVE" && (
+              <ActionButton
+                action={() => suspendVendor(v.userId, v.id)}
+                icon="ban"
+                variant="danger"
+                confirm={`Suspend ${contactName}? They lose access to the vendor portal immediately.`}
+              >
+                Suspend user
+              </ActionButton>
+            )}
+            {userStatus === "SUSPENDED" && (
+              <ActionButton action={() => reinstateVendor(v.userId, v.id)} icon="check" variant="success">
+                Reinstate
+              </ActionButton>
+            )}
+            {userStatus === "PENDING_VERIFICATION" && (
+              <span className="rounded-xl bg-white/10 px-4 py-2.5 text-sm font-bold text-white/60">Account unverified</span>
             )}
           </div>
         </div>
@@ -203,7 +244,102 @@ export default function VendorDetail({ vendor: v }: { vendor: VendorDetailData }
           </div>
         </div>
       )}
+
+      {messaging && (
+        <MessageModal name={contactName} email={v.user.email} userId={v.userId} onClose={() => setMessaging(false)} />
+      )}
+      {rejecting && (
+        <RejectModal name={v.businessName} vendorId={v.id} onClose={() => setRejecting(false)} />
+      )}
     </>
+  );
+}
+
+const label = "mb-1.5 block text-sm font-bold";
+const input = "w-full rounded-xl border border-ink/15 bg-white px-4 py-3 text-sm outline-none transition-colors placeholder:text-ink/35 focus:border-brand";
+
+/** POST /admin/users/{userId}/message — emails the vendor's account address. */
+function MessageModal({ name, email, userId, onClose }: { name: string; email: string; userId: string; onClose: () => void }) {
+  const [subject, setSubject] = useState("");
+  const [body, setBody] = useState("");
+  const [error, setError] = useState("");
+  const [pending, startTransition] = useTransition();
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    startTransition(async () => {
+      const res = await messageVendor(userId, subject.trim(), body.trim());
+      if (res.ok) onClose();
+      else setError(res.error);
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-ink/50" onClick={onClose} />
+      <div className="relative z-10 w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+        <div className="flex items-center justify-between">
+          <p className="text-lg font-bold">Message {name}</p>
+          <button onClick={onClose} className="text-ink/40 hover:text-ink"><Icon name="close" size={20} /></button>
+        </div>
+        <p className="mt-1 text-sm text-ink/50">Sent by email to {email}</p>
+        <form onSubmit={submit} className="mt-4 space-y-4">
+          <div><label className={label}>Subject</label><input className={input} value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="About your vendor account" required /></div>
+          <div>
+            <label className={label}>Message</label>
+            {/* The API caps the body at 2000 characters (MessageUserDto). */}
+            <textarea className={`${input} min-h-32`} value={body} onChange={(e) => setBody(e.target.value)} maxLength={2000} required />
+          </div>
+          {error && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm font-bold text-red-600">{error}</p>}
+          <div className="grid grid-cols-2 gap-3 pt-2">
+            <button type="button" onClick={onClose} className="rounded-xl border border-ink/15 py-3 text-sm font-bold hover:bg-ink/5">Cancel</button>
+            <button type="submit" disabled={pending} className="rounded-xl bg-brand py-3 text-sm font-bold text-white hover:opacity-90 disabled:opacity-60">{pending ? "Sending…" : "Send message"}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+/** POST /admin/vendors/{id}/reject — reason is optional but worth capturing. */
+function RejectModal({ name, vendorId, onClose }: { name: string; vendorId: string; onClose: () => void }) {
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState("");
+  const [pending, startTransition] = useTransition();
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!window.confirm(`Reject ${name}? Their listings stop being sellable.`)) return;
+    setError("");
+    startTransition(async () => {
+      const res = await rejectVendor(vendorId, reason);
+      if (res.ok) onClose();
+      else setError(res.error);
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-ink/50" onClick={onClose} />
+      <div className="relative z-10 w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+        <div className="flex items-center justify-between">
+          <p className="text-lg font-bold">Reject {name}</p>
+          <button onClick={onClose} className="text-ink/40 hover:text-ink"><Icon name="close" size={20} /></button>
+        </div>
+        <form onSubmit={submit} className="mt-4 space-y-4">
+          <div>
+            <label className={label}>Reason <span className="font-normal text-ink/45">(optional)</span></label>
+            <textarea className={`${input} min-h-28`} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Shown on the vendor's record" />
+          </div>
+          {error && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm font-bold text-red-600">{error}</p>}
+          <div className="grid grid-cols-2 gap-3 pt-2">
+            <button type="button" onClick={onClose} className="rounded-xl border border-ink/15 py-3 text-sm font-bold hover:bg-ink/5">Cancel</button>
+            <button type="submit" disabled={pending} className="rounded-xl border border-red-200 bg-red-50 py-3 text-sm font-bold text-red-600 hover:bg-red-100 disabled:opacity-60">{pending ? "Rejecting…" : "Reject vendor"}</button>
+          </div>
+        </form>
+      </div>
+    </div>
   );
 }
 

@@ -5,6 +5,8 @@ import Image from "next/image";
 import Icon from "@/components/Icon";
 import { apiFetchSafe } from "@/lib/api";
 import { productImage } from "@/lib/dashboard";
+import ActionButton from "@/components/ActionButton";
+import { refundOrder, cancelOrder } from "../actions";
 
 export async function generateMetadata({
   params,
@@ -102,6 +104,9 @@ export default async function Page({
   const stage =
     COMPLETED_STAGE[order.status] ?? FLOW.findIndex((f) => f.status === order.status);
 
+  // AdminOrdersService.reverse refuses an order that is already reversed.
+  const reversible = order.status !== "REFUNDED" && order.status !== "CANCELLED";
+
   const addressLines = jsonLines(order.deliveryAddress);
   const vendors = [...new Set(order.items.map((it) => it.vendor).filter(Boolean))] as string[];
 
@@ -124,9 +129,15 @@ export default async function Page({
                 <p className="text-sm text-ink/50">Order fulfilment</p>
                 <p className="text-lg font-bold">{order.fulfilmentMode}</p>
               </div>
-              <button className="inline-flex items-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-bold text-white transition-opacity hover:opacity-90">
-                <Icon name="truck" size={16} /> Confirm Order
-              </button>
+              {/*
+                The design had a "Confirm Order" button here. There is no
+                confirm-order endpoint: an order reaches CONFIRMED through
+                payment or POD placement, not through an admin click. Showing
+                the current status is honest; a button that did nothing was not.
+              */}
+              <span className="inline-flex items-center gap-2 rounded-xl bg-ink/5 px-4 py-2.5 text-sm font-bold text-ink/70">
+                <Icon name="truck" size={16} /> {order.status}
+              </span>
             </div>
             <div className="mt-6 flex items-start">
               {FLOW.map((s, i) => (
@@ -185,14 +196,38 @@ export default async function Page({
             </FootCard>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <button className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand py-3.5 text-sm font-bold text-white transition-opacity hover:opacity-90">
-              <Icon name="share" size={16} /> Issue refund
-            </button>
-            <button className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-300 bg-red-50 py-3.5 text-sm font-bold text-red-600 transition-colors hover:bg-red-100">
-              <Icon name="close" size={16} /> Cancel Order
-            </button>
-          </div>
+          {/*
+            Refund and cancel both run AdminOrdersService.reverse: they restore
+            stock, mark the payment REFUNDED and void commissions — clawing back
+            money already credited to affiliate/influencer wallets. Real money,
+            hence a confirm on each. Once the order is REFUNDED or CANCELLED the
+            API refuses a repeat, so neither is offered.
+          */}
+          {reversible ? (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <ActionButton
+                action={refundOrder.bind(null, order.ref)}
+                icon="share"
+                variant="primary"
+                confirm={`Refund ${order.ref} for ${naira(order.total)}? This restores stock and reverses any commission already credited to affiliate and influencer wallets.`}
+              >
+                Issue refund
+              </ActionButton>
+              <ActionButton
+                action={cancelOrder.bind(null, order.ref)}
+                icon="close"
+                variant="danger"
+                confirm={`Cancel ${order.ref}? This restores stock and reverses any commission already credited to affiliate and influencer wallets.`}
+              >
+                Cancel Order
+              </ActionButton>
+            </div>
+          ) : (
+            <p className="rounded-2xl border border-ink/10 bg-ink/[0.03] px-5 py-4 text-sm text-ink/55">
+              This order is {order.status.toLowerCase()}. Stock has been restored and any
+              commission on it reversed — there is no further action to take.
+            </p>
+          )}
         </div>
 
         {/* Right column */}

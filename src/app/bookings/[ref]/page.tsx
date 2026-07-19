@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import Icon from "@/components/Icon";
 import { apiFetchSafe } from "@/lib/api";
+import BookingActions from "./BookingActions";
 
 export async function generateMetadata({
   params,
@@ -59,6 +60,8 @@ const stageFor: Record<string, number> = {
 };
 
 const dash = (v: string | null | undefined) => (v && v.length > 0 ? v : "—");
+const naira = (v: string | number) =>
+  `₦${Number(v).toLocaleString("en-NG", { maximumFractionDigits: 0 })}`;
 const fmtDate = (v: string | null) =>
   v ? new Date(v).toLocaleDateString("en-NG", { dateStyle: "medium" }) : "—";
 
@@ -100,6 +103,11 @@ export default async function Page({
           <Field icon="calendar" label="Date Ordered" value={fmtDate(b.createdAt)} />
           <Field icon="pin" label="City" value={dash(b.city)} />
           <Field icon="alert" label="Description" value={dash(b.description)} />
+          <Field icon="wallet" label="Customer budget" value={b.budget ? naira(b.budget) : "—"} />
+          {/* Written by the accept step — the only place a booking gets priced. */}
+          <Field icon="wallet" label="Quoted amount" value={b.quotedAmount ? naira(b.quotedAmount) : "—"} />
+          {b.adminNote && <Field icon="alert" label="Admin note" value={b.adminNote} />}
+          {b.cancelReason && <Field icon="close" label="Cancellation reason" value={b.cancelReason} />}
         </div>
         {attachments.length > 0 ? (
           <div className="mt-5 grid gap-4 sm:grid-cols-3">
@@ -114,17 +122,8 @@ export default async function Page({
         )}
       </div>
 
-      {/* Requested → Accept / Reject */}
-      {isRequested && (
-        <div className="mt-6 grid gap-4 sm:grid-cols-2">
-          <button className="inline-flex items-center justify-center gap-2 rounded-xl bg-green-600 py-3.5 text-sm font-bold text-white transition-opacity hover:opacity-90">
-            <Icon name="check" size={16} /> Accept
-          </button>
-          <button className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-300 bg-red-50 py-3.5 text-sm font-bold text-red-600 transition-colors hover:bg-red-100">
-            <Icon name="close" size={16} /> Reject
-          </button>
-        </div>
-      )}
+      {/* Lifecycle controls — which ones appear depends on the current status. */}
+      {isRequested && <BookingActions bookingRef={b.ref} status={b.status} />}
 
       {/* Accepted → Booking Fulfilment timeline */}
       {!isRequested && (
@@ -135,13 +134,9 @@ export default async function Page({
                 <p className="text-sm text-ink/50">Booking Fulfilment</p>
                 <p className="text-lg font-bold">Manage booking timeline</p>
               </div>
-              <div className="flex flex-wrap gap-3">
-                <button className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-bold text-white transition-opacity hover:opacity-90"><Icon name="close" size={16} /> Cancel Booking</button>
-                {b.status !== "COMPLETED" && (
-                  <button className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2.5 text-sm font-bold text-white transition-opacity hover:opacity-90"><Icon name="check" size={16} /> Mark as completed</button>
-                )}
-              </div>
             </div>
+            {/* Accept / start / complete / cancel, gated on the server's transition table. */}
+            <BookingActions bookingRef={b.ref} status={b.status} />
             <div className="mt-6 flex items-start">
               {FLOW.map((s, i) => (
                 <div key={s} className="flex flex-1 items-center last:flex-none">

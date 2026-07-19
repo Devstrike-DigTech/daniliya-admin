@@ -1,8 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
 import Icon from "@/components/Icon";
+import ActionButton from "@/components/ActionButton";
+import {
+  changeAffiliateTier,
+  messageAffiliate,
+  reinstateAffiliate,
+  suspendAffiliate,
+  type AffiliateTier,
+} from "../actions";
 
 /** Shape returned by GET /admin/affiliates/{id}. */
 export type AffiliateDetailData = {
@@ -50,8 +58,18 @@ function bankLabel(json: Record<string, unknown> | null): string {
 export default function AffiliateDetail({ affiliate: a }: { affiliate: AffiliateDetailData }) {
   const [tab, setTab] = useState<(typeof TABS)[number]>("Overview");
   const name = `${a.user.firstName} ${a.user.lastName}`;
+  const [messaging, setMessaging] = useState(false);
+  const [changingTier, setChangingTier] = useState(false);
   const state = a.user.status === "ACTIVE" && a.isActive ? "Active" : title(a.user.status);
   const suspended = !(a.user.status === "ACTIVE" && a.isActive);
+  /**
+   * The chip above blends User.status with the profile's own isActive flag, but
+   * only User.status is writable from here — suspend/reinstate hit
+   * /admin/users/{userId}/…, and there is no endpoint for isActive. So the
+   * buttons key off User.status alone, and neither is offered for
+   * PENDING_VERIFICATION, which the API refuses.
+   */
+  const userStatus = a.user.status;
 
   return (
     <>
@@ -66,9 +84,7 @@ export default function AffiliateDetail({ affiliate: a }: { affiliate: Affiliate
             <p className="mt-0.5 text-sm text-ink/50">{a.id} · {a.referralCode}</p>
           </div>
         </div>
-        <button className="inline-flex items-center gap-2 rounded-xl border border-brand px-5 py-3 text-sm font-bold text-brand transition-colors hover:bg-brand/10">
-          <Icon name="download" size={17} /> Export CSV
-        </button>
+        {/* No affiliate export endpoint exists on the API, so no Export CSV button here. */}
       </div>
 
       {/* Dark hero banner */}
@@ -98,21 +114,30 @@ export default function AffiliateDetail({ affiliate: a }: { affiliate: Affiliate
               </div>
             </div>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <button className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-bold transition-colors hover:bg-white/15">
+          <div className="flex flex-wrap items-start gap-2">
+            <button onClick={() => setMessaging(true)} className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-bold transition-colors hover:bg-white/15">
               <Icon name="message" size={16} /> Message
             </button>
-            <button className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-bold transition-colors hover:bg-white/15">
+            <button onClick={() => setChangingTier(true)} className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-bold transition-colors hover:bg-white/15">
               <Icon name="medal" size={16} /> Change tier
             </button>
-            {suspended ? (
-              <button className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2.5 text-sm font-bold transition-opacity hover:opacity-90">
-                <Icon name="check" size={16} /> Reinstate
-              </button>
-            ) : (
-              <button className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-bold transition-opacity hover:opacity-90">
-                <Icon name="ban" size={16} /> Suspend user
-              </button>
+            {userStatus === "ACTIVE" && (
+              <ActionButton
+                action={() => suspendAffiliate(a.userId, a.id)}
+                icon="ban"
+                variant="danger"
+                confirm={`Suspend ${name}? They lose access to the affiliate portal immediately.`}
+              >
+                Suspend user
+              </ActionButton>
+            )}
+            {userStatus === "SUSPENDED" && (
+              <ActionButton action={() => reinstateAffiliate(a.userId, a.id)} icon="check" variant="success">
+                Reinstate
+              </ActionButton>
+            )}
+            {userStatus === "PENDING_VERIFICATION" && (
+              <span className="rounded-xl bg-white/10 px-4 py-2.5 text-sm font-bold text-white/60">Account unverified</span>
             )}
           </div>
         </div>
@@ -144,7 +169,106 @@ export default function AffiliateDetail({ affiliate: a }: { affiliate: Affiliate
       {tab === "Overview" && <OverviewTab a={a} />}
       {tab === "Products" && <ProductsTab />}
       {tab === "Payouts & Assessment" && <PayoutsTab a={a} />}
+
+      {messaging && (
+        <MessageModal name={name} email={a.user.email} userId={a.userId} onClose={() => setMessaging(false)} />
+      )}
+      {changingTier && (
+        <TierModal name={name} affiliateId={a.id} current={a.tier as AffiliateTier} onClose={() => setChangingTier(false)} />
+      )}
     </>
+  );
+}
+
+const fieldLabel = "mb-1.5 block text-sm font-bold";
+const fieldInput = "w-full rounded-xl border border-ink/15 bg-white px-4 py-3 text-sm outline-none transition-colors placeholder:text-ink/35 focus:border-brand";
+
+const TIERS: AffiliateTier[] = ["BRONZE", "SILVER", "GOLD", "PLATINUM"];
+
+/** POST /admin/affiliates/{id}/tier — tier drives commission rates, so it is audited server-side. */
+function TierModal({ name, affiliateId, current, onClose }: { name: string; affiliateId: string; current: AffiliateTier; onClose: () => void }) {
+  const [tier, setTier] = useState<AffiliateTier>(current);
+  const [error, setError] = useState("");
+  const [pending, startTransition] = useTransition();
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    startTransition(async () => {
+      const res = await changeAffiliateTier(affiliateId, tier);
+      if (res.ok) onClose();
+      else setError(res.error);
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-ink/50" onClick={onClose} />
+      <div className="relative z-10 w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+        <div className="flex items-center justify-between">
+          <p className="text-lg font-bold">Change tier</p>
+          <button onClick={onClose} className="text-ink/40 hover:text-ink"><Icon name="close" size={20} /></button>
+        </div>
+        <p className="mt-1 text-sm text-ink/50">{name} · currently {title(current)}</p>
+        <form onSubmit={submit} className="mt-4 space-y-4">
+          <div>
+            <label className={fieldLabel}>Tier</label>
+            <select className={fieldInput} value={tier} onChange={(e) => setTier(e.target.value as AffiliateTier)}>
+              {TIERS.map((t) => <option key={t} value={t}>{title(t)}</option>)}
+            </select>
+          </div>
+          {error && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm font-bold text-red-600">{error}</p>}
+          <div className="grid grid-cols-2 gap-3 pt-2">
+            <button type="button" onClick={onClose} className="rounded-xl border border-ink/15 py-3 text-sm font-bold hover:bg-ink/5">Cancel</button>
+            <button type="submit" disabled={pending || tier === current} className="rounded-xl bg-brand py-3 text-sm font-bold text-white hover:opacity-90 disabled:opacity-60">{pending ? "Saving…" : "Save tier"}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+/** POST /admin/users/{userId}/message — emails the affiliate's account address. */
+function MessageModal({ name, email, userId, onClose }: { name: string; email: string; userId: string; onClose: () => void }) {
+  const [subject, setSubject] = useState("");
+  const [body, setBody] = useState("");
+  const [error, setError] = useState("");
+  const [pending, startTransition] = useTransition();
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    startTransition(async () => {
+      const res = await messageAffiliate(userId, subject.trim(), body.trim());
+      if (res.ok) onClose();
+      else setError(res.error);
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-ink/50" onClick={onClose} />
+      <div className="relative z-10 w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+        <div className="flex items-center justify-between">
+          <p className="text-lg font-bold">Message {name}</p>
+          <button onClick={onClose} className="text-ink/40 hover:text-ink"><Icon name="close" size={20} /></button>
+        </div>
+        <p className="mt-1 text-sm text-ink/50">Sent by email to {email}</p>
+        <form onSubmit={submit} className="mt-4 space-y-4">
+          <div><label className={fieldLabel}>Subject</label><input className={fieldInput} value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="About your affiliate account" required /></div>
+          <div>
+            <label className={fieldLabel}>Message</label>
+            {/* The API caps the body at 2000 characters (MessageUserDto). */}
+            <textarea className={`${fieldInput} min-h-32`} value={body} onChange={(e) => setBody(e.target.value)} maxLength={2000} required />
+          </div>
+          {error && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm font-bold text-red-600">{error}</p>}
+          <div className="grid grid-cols-2 gap-3 pt-2">
+            <button type="button" onClick={onClose} className="rounded-xl border border-ink/15 py-3 text-sm font-bold hover:bg-ink/5">Cancel</button>
+            <button type="submit" disabled={pending} className="rounded-xl bg-brand py-3 text-sm font-bold text-white hover:opacity-90 disabled:opacity-60">{pending ? "Sending…" : "Send message"}</button>
+          </div>
+        </form>
+      </div>
+    </div>
   );
 }
 

@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import Icon from "@/components/Icon";
 import { productGallery } from "@/lib/dashboard";
+import ProductModeration from "../ProductModeration";
 
 export type AdminProductDetail = {
   id: string;
@@ -132,14 +133,12 @@ export default function ProductDetail({ product: p }: { product: AdminProductDet
         </label>
       </div>
 
-      <div className="mt-6 grid gap-4 sm:grid-cols-2">
-        <button className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand/10 py-3.5 text-sm font-bold text-brand transition-colors hover:bg-brand/20">
-          <Icon name="ban" size={16} /> Unlist temporarily
-        </button>
-        <button className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-300 bg-red-50 py-3.5 text-sm font-bold text-red-600 transition-colors hover:bg-red-100">
-          <Icon name="close" size={16} /> Remove from marketplace
-        </button>
-      </div>
+      {/*
+        Moderation. The design called for "Unlist temporarily" and "Remove from
+        marketplace"; the API supports neither, so they are not shown rather
+        than mapped onto approve/reject, which mean something different.
+      */}
+      <ProductModeration id={p.id} status={p.status} rejectedReason={p.rejectedReason} />
     </>
   );
 }

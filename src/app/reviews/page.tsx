@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Icon from "@/components/Icon";
 import { PageHead, DataTable } from "@/components/widgets";
 import { apiFetchSafe } from "@/lib/api";
+import ReviewModeration from "./ReviewModeration";
 
 export const metadata: Metadata = { title: "Reviews" };
 
@@ -11,6 +12,7 @@ type ReviewRow = {
   rating: number;
   body: string;
   status: string;
+  flagReason: string | null;
   response: string | null;
   createdAt: string;
   reviewer: string;
@@ -43,19 +45,17 @@ export default async function ReviewsPage() {
                 <Icon name="star" size={14} className="text-brand" /> {r.rating}
               </span>
             </td>
-            <td className="max-w-[280px] px-5 py-4 text-ink/70">{r.body}</td>
+            <td className="max-w-[280px] px-5 py-4 text-ink/70">
+              {r.body}
+              {r.flagReason && (
+                <span className="mt-1 block text-xs font-bold text-red-600">Flagged: {r.flagReason}</span>
+              )}
+            </td>
             <td className="px-5 py-4">
               <span className={`inline-block rounded-full px-3 py-1 text-xs font-bold ${statusPill[r.status] ?? "bg-ink/8 text-ink/60"}`}>{titled(r.status)}</span>
             </td>
             <td className="px-5 py-4 text-right">
-              {r.status === "FLAGGED" ? (
-                <div className="flex justify-end gap-2">
-                  <button className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-bold text-white hover:opacity-90">Keep</button>
-                  <button className="rounded-lg border border-red-300 px-3 py-1.5 text-xs font-bold text-red-600 hover:bg-red-50">Remove</button>
-                </div>
-              ) : (
-                <span className="text-xs text-ink/40">—</span>
-              )}
+              <ReviewModeration id={r.id} status={r.status} />
             </td>
           </tr>
         ))}

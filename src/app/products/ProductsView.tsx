@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Icon from "@/components/Icon";
 import { productImage, productGallery } from "@/lib/dashboard";
+import ProductModeration from "./ProductModeration";
 
 /** GET /admin/products */
 export type AdminProduct = {
@@ -238,10 +239,12 @@ export default function ProductsView({ products }: { products: AdminProduct[] })
                 <p className="text-xs text-ink/50">Profit per unit: —</p>
               </div>
             </div>
-            <div className="mt-6 grid gap-3 sm:grid-cols-2">
-              <button className="inline-flex items-center justify-center gap-2 rounded-xl bg-green-600 py-3.5 text-sm font-bold text-white transition-opacity hover:opacity-90"><Icon name="check" size={16} /> Approve</button>
-              <button className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-300 bg-red-50 py-3.5 text-sm font-bold text-red-600 transition-colors hover:bg-red-100"><Icon name="close" size={16} /> Reject</button>
-            </div>
+            <ProductModeration
+              id={modal.id}
+              status={modal.status}
+              rejectedReason={modal.rejectedReason}
+              onDone={() => setModal(null)}
+            />
           </div>
         </div>
       )}

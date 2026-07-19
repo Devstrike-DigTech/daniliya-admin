@@ -1,11 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Icon from "@/components/Icon";
+import { assignTicket, closeTicket, replyToTicket } from "./actions";
 
 export type TicketSummary = {
   ref: string;
+  assignedTo?: string | null;
   subject: string;
   priority: string;
   status: string;
@@ -16,6 +18,7 @@ export type TicketSummary = {
 export type ThreadMessage = { fromAdmin: boolean; body: string; at: string };
 
 export type TicketThread = {
+  assignedTo?: string | null;
   ref: string;
   subject: string;
   priority: string;
@@ -107,8 +110,10 @@ export default function SupportView({
                 <div>
                   <p className="text-xs text-ink/45">{thread.ref}</p>
                   <p className="mt-0.5 text-lg font-bold">{thread.subject}</p>
-                  {/* No assignee field on the ticket payload. */}
-                  <p className="text-sm text-ink/50">{senderName} · {titled(thread.status)}</p>
+                  <p className="text-sm text-ink/50">
+                    {senderName} · {titled(thread.status)} ·{" "}
+                    {thread.assignedTo ? `Assigned to ${thread.assignedTo}` : "Unassigned"}
+                  </p>
                 </div>
                 <span className={`rounded-full px-3 py-1 text-xs font-bold ${priorityPill[thread.priority] ?? "bg-ink/8 text-ink/60"}`}>{titled(thread.priority)}</span>
               </div>
@@ -134,13 +139,88 @@ export default function SupportView({
                 )}
               </div>
 
-              <textarea placeholder="Type a reply" className="min-h-[90px] w-full rounded-xl border border-ink/15 bg-white px-4 py-3 text-sm outline-none transition-colors placeholder:text-ink/40 focus:border-brand" />
-              <button className="mt-4 rounded-xl bg-green-600 px-6 py-3 text-sm font-bold text-white transition-opacity hover:opacity-90">Mark as resolved</button>
+              <TicketActions ticketRef={thread.ref} status={thread.status} />
             </>
           ) : (
             <p className="py-20 text-center text-sm text-ink/45">Select a ticket to view the conversation.</p>
           )}
         </div>
+      </div>
+    </>
+  );
+}
+
+/**
+ * Reply, take ownership, and close.
+ *
+ * The reply box and the resolve button were both inert: an admin could type a
+ * whole answer to a customer and nothing was ever sent. A closed ticket offers
+ * no further action rather than pretending it can be replied to.
+ */
+function TicketActions({ ticketRef, status }: { ticketRef: string; status: string }) {
+  const router = useRouter();
+  const [body, setBody] = useState("");
+  const [error, setError] = useState("");
+  const [pending, startTransition] = useTransition();
+
+  const closed = status === "CLOSED" || status === "RESOLVED";
+
+  const run = (fn: () => Promise<{ ok: true } | { ok: false; error: string }>, after?: () => void) => {
+    setError("");
+    startTransition(async () => {
+      const res = await fn();
+      if (!res.ok) setError(res.error);
+      else {
+        after?.();
+        router.refresh();
+      }
+    });
+  };
+
+  if (closed) {
+    return (
+      <div className="mt-2 flex items-center gap-2 rounded-xl border border-ink/10 bg-ink/[0.03] px-4 py-3 text-sm font-bold text-ink/55">
+        <Icon name="check" size={16} /> This ticket is closed.
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <textarea
+        value={body}
+        onChange={(e) => setBody(e.target.value)}
+        placeholder="Type a reply"
+        className="min-h-[90px] w-full rounded-xl border border-ink/15 bg-white px-4 py-3 text-sm outline-none transition-colors placeholder:text-ink/40 focus:border-brand"
+      />
+      {error && (
+        <p className="mt-2 rounded-xl bg-red-50 px-4 py-2.5 text-xs font-bold text-red-600">{error}</p>
+      )}
+      <div className="mt-4 flex flex-wrap gap-3">
+        <button
+          disabled={pending}
+          onClick={() => run(() => replyToTicket(ticketRef, body), () => setBody(""))}
+          className="rounded-xl bg-brand px-6 py-3 text-sm font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+        >
+          {pending ? "Working…" : "Send reply"}
+        </button>
+        <button
+          disabled={pending}
+          onClick={() => run(() => assignTicket(ticketRef))}
+          className="rounded-xl border border-ink/15 px-6 py-3 text-sm font-bold transition-colors hover:bg-ink/5 disabled:opacity-60"
+        >
+          Assign to me
+        </button>
+        <button
+          disabled={pending}
+          onClick={() => {
+            if (!window.confirm("Close this ticket? The customer will not be able to reply on it.")) return;
+            run(() => closeTicket(ticketRef));
+          }}
+          className="rounded-xl bg-green-600 px-6 py-3 text-sm font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+        >
+          Mark as resolved
+        </button>
       </div>
     </>
   );
