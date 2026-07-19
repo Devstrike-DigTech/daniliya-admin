@@ -4,6 +4,8 @@ import Link from "next/link";
 import Icon from "@/components/Icon";
 import Countdown from "@/components/Countdown";
 import { apiFetchSafe } from "@/lib/api";
+import ActionButton from "@/components/ActionButton";
+import { approveBatch, cancelBatch, holdBatch, retryBatch } from "../actions";
 
 export async function generateMetadata({
   params,
@@ -182,12 +184,12 @@ export default async function Page({
       </div>
 
       {/* Status-specific actions */}
-      <PayoutActions status={status} />
+      <PayoutActions status={status} batchRef={batch.ref} />
     </>
   );
 }
 
-function PayoutActions({ status }: { status: string }) {
+function PayoutActions({ status, batchRef }: { status: string; batchRef: string }) {
   if (status === "PAID") {
     return (
       <div className="mt-6 flex items-center gap-2 rounded-2xl border border-green-200 bg-green-50 px-5 py-4 text-sm font-bold text-green-700">
@@ -198,24 +200,39 @@ function PayoutActions({ status }: { status: string }) {
   if (status === "REVIEW") {
     return (
       <div className="mt-6 grid gap-4 sm:grid-cols-2">
-        <button className="inline-flex items-center justify-center gap-2 rounded-xl bg-green-600 py-3.5 text-sm font-bold text-white transition-opacity hover:opacity-90">
-          <Icon name="check" size={16} /> Approve &amp; schedule
-        </button>
-        <button className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-300 bg-red-50 py-3.5 text-sm font-bold text-red-600 transition-colors hover:bg-red-100">
-          <Icon name="close" size={16} /> Reject batch
-        </button>
+        <ActionButton
+          action={approveBatch.bind(null, batchRef)}
+          icon="check"
+          variant="success"
+          confirm="Approve and schedule this batch? This initiates real transfers to every beneficiary in it."
+        >
+          Approve &amp; schedule
+        </ActionButton>
+        <ActionButton
+          action={cancelBatch.bind(null, batchRef)}
+          icon="close"
+          variant="danger"
+          confirm="Cancel this batch? Nobody in it will be paid this run."
+        >
+          Reject batch
+        </ActionButton>
       </div>
     );
   }
   if (status === "FAILED") {
     return (
       <div className="mt-6 grid gap-4 sm:grid-cols-2">
-        <button className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand py-3.5 text-sm font-bold text-white transition-opacity hover:opacity-90">
-          <Icon name="share" size={16} /> Retry failed transfers
-        </button>
-        <button className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-300 bg-red-50 py-3.5 text-sm font-bold text-red-600 transition-colors hover:bg-red-100">
-          <Icon name="close" size={16} /> Cancel Payout
-        </button>
+        <ActionButton action={retryBatch.bind(null, batchRef)} icon="share" variant="primary">
+          Retry failed transfers
+        </ActionButton>
+        <ActionButton
+          action={cancelBatch.bind(null, batchRef)}
+          icon="close"
+          variant="danger"
+          confirm="Cancel this batch? Nobody in it will be paid this run."
+        >
+          Cancel Payout
+        </ActionButton>
       </div>
     );
   }
@@ -229,12 +246,22 @@ function PayoutActions({ status }: { status: string }) {
   // Scheduled / Held
   return (
     <div className="mt-6 grid gap-4 sm:grid-cols-2">
-      <button className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-300 py-3.5 text-sm font-bold text-red-600 transition-colors hover:bg-red-50">
-        <Icon name="clock" size={16} /> Hold Batch
-      </button>
-      <button className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-300 bg-red-50 py-3.5 text-sm font-bold text-red-600 transition-colors hover:bg-red-100">
-        <Icon name="close" size={16} /> Cancel Payout
-      </button>
+      <ActionButton
+        action={holdBatch.bind(null, batchRef)}
+        icon="clock"
+        variant="outline"
+        confirm="Put this batch on hold? Transfers will not go out until it is released."
+      >
+        Hold Batch
+      </ActionButton>
+      <ActionButton
+        action={cancelBatch.bind(null, batchRef)}
+        icon="close"
+        variant="danger"
+        confirm="Cancel this batch? Nobody in it will be paid this run."
+      >
+        Cancel Payout
+      </ActionButton>
     </div>
   );
 }

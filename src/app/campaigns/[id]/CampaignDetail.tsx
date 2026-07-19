@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import Icon from "@/components/Icon";
-import { endCampaign, pauseCampaign, resumeCampaign } from "../actions";
+import { approveSubmission, endCampaign, pauseCampaign, rejectSubmission, resumeCampaign } from "../actions";
 import { payoutLine, type AdminCampaign } from "../CampaignsView";
 
 /** GET /admin/campaigns/{id} — the list shape plus its assignments. */
@@ -50,6 +50,12 @@ export type CampaignSubmission = {
 
 const TABS = ["Campaign details", "Post submissions from influencers"] as const;
 const card = "rounded-2xl border border-ink/10 bg-white p-6";
+
+const submissionPill: Record<string, string> = {
+  SUBMITTED: "bg-amber-100 text-amber-700",
+  APPROVED: "bg-green-100 text-green-700",
+  REJECTED: "bg-red-100 text-red-600",
+};
 
 const detailPill: Record<string, string> = {
   PAUSED: "bg-amber-100 text-amber-700",
@@ -248,7 +254,9 @@ export default function CampaignDetail({
                   <tr className="border-b border-ink/10 text-ink/55">
                     <th className="py-3 pr-4 font-bold">Influencer</th>
                     <th className="px-4 py-3 font-bold">Followers</th>
-                    <th className="px-4 py-3 text-right font-bold">Submission links</th>
+                    <th className="px-4 py-3 font-bold">Disclosure</th>
+                    <th className="px-4 py-3 font-bold">Status</th>
+                    <th className="px-4 py-3 text-right font-bold">Review</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-ink/8">
@@ -258,8 +266,30 @@ export default function CampaignDetail({
                       <td className="px-4 py-4 text-ink/70">
                         {s.assignment.influencer.followerCount?.toLocaleString("en-NG") ?? "—"}
                       </td>
-                      <td className="px-4 py-4 text-right">
-                        <a href={s.postUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center rounded-lg bg-brand px-6 py-2 text-sm font-bold text-white hover:opacity-90">View</a>
+                      <td className="px-4 py-4">
+                        {s.hasAdDisclosure ? (
+                          <span className="text-xs font-bold text-green-700">#ad declared</span>
+                        ) : (
+                          <span className="text-xs font-bold text-red-600">No disclosure</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-4">
+                        <span className={`rounded-full px-3 py-1 text-xs font-bold ${submissionPill[s.status] ?? "bg-ink/10 text-ink/55"}`}>
+                          {s.status.charAt(0) + s.status.slice(1).toLowerCase()}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="flex items-center justify-end gap-2">
+                          <a href={s.postUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center rounded-lg border border-ink/15 px-4 py-2 text-xs font-bold hover:bg-ink/5">
+                            View post
+                          </a>
+                          {s.status === "SUBMITTED" && (
+                            <SubmissionReview submissionId={s.id} campaignId={c.id} />
+                          )}
+                        </div>
+                        {s.reviewerNote && (
+                          <p className="mt-1.5 text-right text-xs text-ink/50">{s.reviewerNote}</p>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -271,6 +301,64 @@ export default function CampaignDetail({
           )}
         </div>
       )}
+    </>
+  );
+}
+
+/**
+ * Approve or reject one post submission.
+ *
+ * Approval is what releases the creator's money: their commission stays PENDING
+ * until the post is APPROVED, so this is a payment decision, not just
+ * moderation — hence the confirmation on both paths.
+ */
+function SubmissionReview({
+  submissionId,
+  campaignId,
+}: {
+  submissionId: string;
+  campaignId: string;
+}) {
+  const [error, setError] = useState("");
+  const [pending, startTransition] = useTransition();
+
+  const run = (fn: () => Promise<{ ok: true } | { ok: false; error: string }>, ask: string) => {
+    if (!window.confirm(ask)) return;
+    setError("");
+    startTransition(async () => {
+      const res = await fn();
+      if (!res.ok) setError(res.error);
+    });
+  };
+
+  return (
+    <>
+      <button
+        disabled={pending}
+        onClick={() =>
+          run(
+            () => approveSubmission(submissionId, campaignId),
+            "Approve this post? This releases the creator's commission for payout.",
+          )
+        }
+        className="inline-flex items-center justify-center rounded-lg bg-green-600 px-4 py-2 text-xs font-bold text-white hover:opacity-90 disabled:opacity-60"
+      >
+        {pending ? "…" : "Approve"}
+      </button>
+      <button
+        disabled={pending}
+        onClick={() => {
+          const note = window.prompt("Why is this post being rejected? (optional)") ?? undefined;
+          run(
+            () => rejectSubmission(submissionId, campaignId, note || undefined),
+            "Reject this post? The creator will not be paid for it.",
+          );
+        }}
+        className="inline-flex items-center justify-center rounded-lg border border-red-300 bg-red-50 px-4 py-2 text-xs font-bold text-red-600 hover:bg-red-100 disabled:opacity-60"
+      >
+        Reject
+      </button>
+      {error && <p className="mt-1 text-xs font-bold text-red-600">{error}</p>}
     </>
   );
 }

@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Icon from "@/components/Icon";
+import ActionButton from "@/components/ActionButton";
+import { runPayouts } from "./actions";
 
 export type PayoutRow = {
   ref: string;
@@ -73,9 +75,25 @@ export default function PayoutsView({ payouts }: { payouts: PayoutRow[] }) {
           <h1 className="text-2xl font-bold sm:text-[28px]">Payouts</h1>
           <p className="mt-1 text-sm text-ink/55">Weekly Monday batches · manual review, approve, release</p>
         </div>
-        <button onClick={exportCsv} className="inline-flex items-center gap-2 rounded-xl border border-brand px-5 py-3 text-sm font-bold text-brand transition-colors hover:bg-brand/10">
-          <Icon name="download" size={17} /> Export CSV
-        </button>
+        <div className="flex flex-wrap items-start gap-3">
+          <button onClick={exportCsv} className="inline-flex items-center gap-2 rounded-xl border border-brand px-5 py-3 text-sm font-bold text-brand transition-colors hover:bg-brand/10">
+            <Icon name="download" size={17} /> Export CSV
+          </button>
+          {/*
+            Confirms eligible commissions, credits wallets and builds this
+            period's batches. The weekly cron does the same thing; this is the
+            manual trigger, and the server holds a lock so a double-click
+            cannot produce two runs.
+          */}
+          <ActionButton
+            action={runPayouts}
+            icon="wallet"
+            className="w-auto"
+            confirm="Run payouts now? This confirms eligible commissions, credits wallets and builds the batches for approval."
+          >
+            Run payouts
+          </ActionButton>
+        </div>
       </div>
 
       <div className="mt-6 flex rounded-2xl bg-ink/5 p-1.5">

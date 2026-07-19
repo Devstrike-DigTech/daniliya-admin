@@ -72,3 +72,41 @@ export async function resumeCampaign(id: string): Promise<ActionResult> {
 export async function endCampaign(id: string): Promise<ActionResult> {
   return setCampaignStatus(id, "end");
 }
+
+/**
+ * Approve or reject a creator's post submission.
+ *
+ * This is not cosmetic moderation: CommissionsService.confirmEligible() only
+ * promotes an influencer commission from PENDING to CONFIRMED once the campaign
+ * post is APPROVED. Until an admin approves it here, the creator's earnings
+ * never reach their wallet or a payout batch.
+ */
+export async function approveSubmission(
+  submissionId: string,
+  campaignId: string,
+): Promise<ActionResult> {
+  try {
+    await apiFetch(`/admin/campaigns/submissions/${submissionId}/approve`, { method: "POST" });
+    revalidatePath(`/campaigns/${campaignId}`);
+    return { ok: true };
+  } catch (e) {
+    return failed(e);
+  }
+}
+
+export async function rejectSubmission(
+  submissionId: string,
+  campaignId: string,
+  note?: string,
+): Promise<ActionResult> {
+  try {
+    await apiFetch(`/admin/campaigns/submissions/${submissionId}/reject`, {
+      method: "POST",
+      body: JSON.stringify(note ? { note } : {}),
+    });
+    revalidatePath(`/campaigns/${campaignId}`);
+    return { ok: true };
+  } catch (e) {
+    return failed(e);
+  }
+}
