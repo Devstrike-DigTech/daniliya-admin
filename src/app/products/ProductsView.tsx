@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import Image from "next/image";
 import Icon from "@/components/Icon";
 import { productImage, productGallery } from "@/lib/dashboard";
@@ -97,9 +98,14 @@ export default function ProductsView({ products }: { products: AdminProduct[] })
           <h1 className="text-2xl font-bold sm:text-[28px]">Products</h1>
           <p className="mt-1 text-sm text-ink/55">Marketplace-wide catalogue moderation</p>
         </div>
-        <button onClick={exportCsv} className="inline-flex items-center gap-2 rounded-xl border border-brand px-5 py-3 text-sm font-bold text-brand transition-colors hover:bg-brand/10">
-          <Icon name="download" size={17} /> Export CSV
-        </button>
+        <div className="flex items-center gap-3">
+          <button onClick={exportCsv} className="inline-flex items-center gap-2 rounded-xl border border-brand px-5 py-3 text-sm font-bold text-brand transition-colors hover:bg-brand/10">
+            <Icon name="download" size={17} /> Export CSV
+          </button>
+          <Link href="/products/new" className="inline-flex items-center gap-2 rounded-xl bg-brand px-5 py-3 text-sm font-bold text-white transition-opacity hover:opacity-90">
+            <Icon name="plus" size={17} /> Add product
+          </Link>
+        </div>
       </div>
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

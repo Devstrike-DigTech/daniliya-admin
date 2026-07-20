@@ -52,3 +52,74 @@ export async function rejectProduct(id: string, reason?: string): Promise<Action
     return failed(e);
   }
 }
+
+/** The product fields an admin form submits (create and edit share this shape). */
+export type ProductInput = {
+  title: string;
+  description?: string;
+  price: number;
+  stockQuantity: number;
+  category?: string;
+  vendorId?: string | null;
+  commissionRate?: number;
+  publish?: boolean;
+  imageUrls?: string[];
+};
+
+/** POST /admin/products — create a platform-owned or vendor-attributed product. */
+export async function createProduct(
+  input: ProductInput,
+): Promise<ActionResult & { id?: string }> {
+  try {
+    const created = await apiFetch<{ id: string }>("/admin/products", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+    revalidatePath("/products");
+    return { ok: true, id: created.id };
+  } catch (e) {
+    return failed(e);
+  }
+}
+
+/** PATCH /admin/products/{id} — edit fields, vendor attribution and images. */
+export async function updateProduct(
+  id: string,
+  input: Partial<ProductInput>,
+): Promise<ActionResult> {
+  try {
+    await apiFetch(`/admin/products/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    });
+    revalidatePath("/products");
+    revalidatePath(`/products/${id}`);
+    return { ok: true };
+  } catch (e) {
+    return failed(e);
+  }
+}
+
+/** POST /admin/products/{id}/delist — take it off the storefront (reversible). */
+export async function delistProduct(id: string): Promise<ActionResult> {
+  try {
+    await apiFetch(`/admin/products/${id}/delist`, { method: "POST" });
+    revalidatePath("/products");
+    revalidatePath(`/products/${id}`);
+    return { ok: true };
+  } catch (e) {
+    return failed(e);
+  }
+}
+
+/** POST /admin/products/{id}/relist — put it back on the storefront. */
+export async function relistProduct(id: string): Promise<ActionResult> {
+  try {
+    await apiFetch(`/admin/products/${id}/relist`, { method: "POST" });
+    revalidatePath("/products");
+    revalidatePath(`/products/${id}`);
+    return { ok: true };
+  } catch (e) {
+    return failed(e);
+  }
+}

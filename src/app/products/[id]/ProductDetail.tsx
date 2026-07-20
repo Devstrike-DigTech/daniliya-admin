@@ -4,8 +4,10 @@ import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import Icon from "@/components/Icon";
+import ActionButton from "@/components/ActionButton";
 import { productGallery } from "@/lib/dashboard";
 import ProductModeration from "../ProductModeration";
+import { delistProduct, relistProduct } from "../actions";
 
 export type AdminProductDetail = {
   id: string;
@@ -26,11 +28,19 @@ export type AdminProductDetail = {
   _count: { orderItems: number; reviews: number };
 };
 
-const label = "mb-1.5 block text-sm font-bold";
-const input = "w-full rounded-xl border border-ink/15 bg-white px-4 py-3 text-sm outline-none transition-colors placeholder:text-ink/35 focus:border-brand";
-
 const naira = (v: string | number) =>
   `₦${Number(v).toLocaleString("en-NG", { maximumFractionDigits: 0 })}`;
+
+// Mirrors ProductsView — keep the status vocabulary consistent across pages.
+const statusPill: Record<string, string> = {
+  ACTIVE: "bg-green-100 text-green-700",
+  PENDING_REVIEW: "bg-amber-100 text-amber-700",
+  DRAFT: "bg-ink/8 text-ink/60",
+  REJECTED: "bg-red-100 text-red-600",
+  REMOVED: "bg-ink/10 text-ink/50",
+};
+const statusLabel = (v: string) =>
+  v.charAt(0) + v.slice(1).toLowerCase().replace(/_/g, " ");
 
 function StatFoot({ label, value }: { label: string; value: string }) {
   return (
@@ -46,7 +56,6 @@ function StatFoot({ label, value }: { label: string; value: string }) {
 
 export default function ProductDetail({ product: p }: { product: AdminProductDetail }) {
   const [active, setActive] = useState(0);
-  const [promote, setPromote] = useState(false);
 
   // Real product images when the vendor has uploaded any; otherwise the decorative
   // local placeholders — these are not product data.
@@ -55,14 +64,22 @@ export default function ProductDetail({ product: p }: { product: AdminProductDet
 
   return (
     <>
-      <div className="flex items-start gap-3">
-        <Link href="/products" className="mt-1.5 text-ink/60 hover:text-ink"><Icon name="arrow-left" size={20} /></Link>
-        <div>
-          <h1 className="text-2xl font-bold sm:text-[28px]">{p.title} - {naira(p.price)}</h1>
-          <p className="mt-0.5 flex items-center gap-1.5 text-sm text-ink/50">
-            {p.category ?? "—"} <Icon name="star" size={14} className="text-brand" /> <span className="font-bold text-ink/70">—</span> ({p._count.reviews})
-          </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <Link href="/products" className="mt-1.5 text-ink/60 hover:text-ink"><Icon name="arrow-left" size={20} /></Link>
+          <div>
+            <h1 className="text-2xl font-bold sm:text-[28px]">{p.title} - {naira(p.price)}</h1>
+            <p className="mt-0.5 flex items-center gap-1.5 text-sm text-ink/50">
+              {p.category ?? "—"} · {p.vendor?.businessName ?? "Daniliya (platform)"} · {p._count.reviews} reviews
+            </p>
+          </div>
         </div>
+        <Link
+          href={`/products/${p.id}/edit`}
+          className="inline-flex items-center gap-2 rounded-xl bg-brand px-5 py-2.5 text-sm font-bold text-white transition-opacity hover:opacity-90"
+        >
+          <Icon name="settings" size={16} /> Edit product
+        </Link>
       </div>
 
       {/* Gallery */}
@@ -102,43 +119,50 @@ export default function ProductDetail({ product: p }: { product: AdminProductDet
         <StatFoot label="Channels" value="—" />
       </div>
 
-      {/* Operational settings */}
+      {/* Listing status + delist/relist */}
       <div className="mt-6 rounded-2xl border border-ink/10 bg-white p-6">
-        <p className="text-sm text-ink/50">Operational settings</p>
-        <div className="mt-4 grid gap-5 sm:grid-cols-2">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <label className={label}>Sale price (₦)</label>
-            <input className={input} placeholder="Enter cost of item" defaultValue={p.price} />
+            <p className="text-sm text-ink/50">Listing status</p>
+            <p className="mt-1 flex items-center gap-2 text-lg font-bold">
+              <span className={`inline-block rounded-full px-3 py-1 text-xs ${statusPill[p.status] ?? "bg-ink/8 text-ink/60"}`}>
+                {statusLabel(p.status)}
+              </span>
+            </p>
           </div>
-          <div>
-            <label className={label}>Unit of measurement</label>
-            <select className={input} defaultValue="">
-              <option value="" disabled>Select unit of measurement</option>
-              <option>Piece</option><option>Set</option><option>Pack</option><option>Kg</option>
-            </select>
-          </div>
-          <div>
-            <label className={label}>Initial Stock</label>
-            <input className={input} placeholder="Enter your current stock level" defaultValue={p.stockQuantity} />
-          </div>
-          <div>
-            <label className={label}>Minimum stock level</label>
-            <input className={input} placeholder="Enter your minimum stock level" />
-          </div>
+          <p className="max-w-sm text-xs text-ink/50">
+            Delisting takes it off the storefront immediately; relisting puts it back. Editing does not change this.
+          </p>
         </div>
-        <label className="mt-5 flex cursor-pointer items-center gap-3">
-          <input type="checkbox" checked={promote} onChange={(e) => setPromote(e.target.checked)} className="peer sr-only" />
-          <span className="relative h-6 w-11 shrink-0 rounded-full bg-ink/20 transition-colors after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-transform peer-checked:bg-brand peer-checked:after:translate-x-5" />
-          <span className="text-sm text-ink/70">Allow your product to be eligible for promotion by top rated influencers &amp; affiliates</span>
-        </label>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          {p.status === "ACTIVE" ? (
+            <ActionButton
+              action={() => delistProduct(p.id)}
+              icon="ban"
+              variant="danger"
+              confirm={`Delist "${p.title}"? It will stop showing on the storefront and can't be bought until you relist it.`}
+            >
+              Delist product
+            </ActionButton>
+          ) : (
+            <ActionButton
+              action={() => relistProduct(p.id)}
+              icon="check"
+              variant="success"
+              confirm={`Relist "${p.title}"? It will become buyable on the storefront again.`}
+            >
+              Relist product
+            </ActionButton>
+          )}
+        </div>
       </div>
 
-      {/*
-        Moderation. The design called for "Unlist temporarily" and "Remove from
-        marketplace"; the API supports neither, so they are not shown rather
-        than mapped onto approve/reject, which mean something different.
-      */}
-      <ProductModeration id={p.id} status={p.status} rejectedReason={p.rejectedReason} />
+      {/* Approve / reject a vendor product that is awaiting review. */}
+      {(p.status === "PENDING_REVIEW" || p.status === "REJECTED") && (
+        <div className="mt-6">
+          <ProductModeration id={p.id} status={p.status} rejectedReason={p.rejectedReason} />
+        </div>
+      )}
     </>
   );
 }
