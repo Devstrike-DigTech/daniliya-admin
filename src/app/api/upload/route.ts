@@ -38,5 +38,6 @@ export async function POST(req: Request) {
       { status: res.status },
     );
   }
-  return NextResponse.json(body);
+  // Unwrap the API's { success, data } envelope so the client gets { url, key, … } directly.
+  return NextResponse.json(body?.data ?? body);
 }
