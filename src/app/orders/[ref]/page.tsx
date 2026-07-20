@@ -6,6 +6,7 @@ import Icon from "@/components/Icon";
 import { apiFetchSafe } from "@/lib/api";
 import { productImage } from "@/lib/dashboard";
 import ActionButton from "@/components/ActionButton";
+import FulfilmentControl from "./FulfilmentControl";
 import { refundOrder, cancelOrder } from "../actions";
 
 export async function generateMetadata({
@@ -83,6 +84,9 @@ function jsonLines(value: Record<string, unknown> | null): string[] {
   return Object.values(value).filter((v): v is string => typeof v === "string" && v.length > 0);
 }
 
+const contactVal = (c: Record<string, unknown> | null, key: string): string | null =>
+  c && typeof c[key] === "string" && (c[key] as string).length > 0 ? (c[key] as string) : null;
+
 function FootCard({ foot = "bg-brand", children }: { foot?: string; children: React.ReactNode }) {
   return (
     <div className="overflow-hidden rounded-2xl border border-ink/10 bg-white">
@@ -152,6 +156,10 @@ export default async function Page({
                 </div>
               ))}
             </div>
+
+            {/* Advance to the next stage. Vendors ship their own products; the
+                admin drives Daniliya-owned orders (and can push any along). */}
+            <FulfilmentControl orderRef={order.ref} status={order.status} />
           </FootCard>
 
           <FootCard>
@@ -233,14 +241,29 @@ export default async function Page({
         {/* Right column */}
         <div className="space-y-6">
           <FootCard>
-            <p className="flex items-center gap-1.5 text-sm text-ink/50"><Icon name="pin" size={14} /> Delivery</p>
-            <p className="mt-3 font-bold leading-relaxed">{addressLines.length ? addressLines.join(", ") : "—"}</p>
-            <p className="mt-3 text-sm text-ink/70">{order.customer.phone ?? "—"}</p>
-            <p className="mt-2 text-sm text-ink/70">
-              {order.deliveredAt
-                ? new Date(order.deliveredAt).toLocaleDateString("en-NG", { dateStyle: "medium" })
-                : "—"}
+            <p className="flex items-center gap-1.5 text-sm text-ink/50">
+              <Icon name="pin" size={14} /> {order.fulfilmentMode === "PICKUP" ? "Pickup" : "Delivery"}
             </p>
+            {order.fulfilmentMode === "PICKUP" ? (
+              <p className="mt-3 font-bold leading-relaxed">Store pickup — no delivery address</p>
+            ) : (
+              <p className="mt-3 font-bold leading-relaxed">
+                {addressLines.length ? addressLines.join(", ") : "No address on file"}
+              </p>
+            )}
+            {/* Recipient comes from the order's contact, not the account — a
+                guest or account holder can ship to someone else. */}
+            <p className="mt-3 text-sm font-bold text-ink/80">
+              {contactVal(order.contact, "fullName") ?? order.customer.name}
+            </p>
+            <p className="text-sm text-ink/70">
+              {contactVal(order.contact, "phone") ?? order.customer.phone ?? "No phone provided"}
+            </p>
+            {order.deliveredAt && (
+              <p className="mt-2 text-xs text-ink/55">
+                Delivered {new Date(order.deliveredAt).toLocaleDateString("en-NG", { dateStyle: "medium" })}
+              </p>
+            )}
           </FootCard>
 
           <FootCard foot="bg-green-500">

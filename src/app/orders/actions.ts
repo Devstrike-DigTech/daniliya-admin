@@ -42,3 +42,27 @@ export async function refundOrder(ref: string): Promise<ActionResult> {
 export async function cancelOrder(ref: string): Promise<ActionResult> {
   return reverse(ref, "cancel");
 }
+
+/**
+ * Advance an order along the fulfilment ladder — PROCESSING → SHIPPED →
+ * DELIVERED → COMPLETED. Admins fulfil Daniliya-owned orders (no vendor) and
+ * can push any order forward. Moving to SHIPPED needs a courier and writes the
+ * shipment the buyer tracks. The API refuses backward or out-of-order moves.
+ */
+export async function advanceOrder(
+  ref: string,
+  status: "PROCESSING" | "SHIPPED" | "DELIVERED" | "COMPLETED",
+  shipment?: { courier?: string; trackingNumber?: string; estimatedDelivery?: string },
+): Promise<ActionResult> {
+  try {
+    await apiFetch(`/admin/orders/${ref}/status`, {
+      method: "POST",
+      body: JSON.stringify({ status, ...shipment }),
+    });
+    revalidatePath("/orders");
+    revalidatePath(`/orders/${ref}`);
+    return { ok: true };
+  } catch (e) {
+    return failed(e);
+  }
+}
