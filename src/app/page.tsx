@@ -2,13 +2,6 @@ import Link from "next/link";
 import Icon from "@/components/Icon";
 import { Card, StatTile, StatusBadge } from "@/components/widgets";
 import { apiFetchSafe } from "@/lib/api";
-import {
-  // NOTE: still dummy — no API endpoint yet for the weekly revenue series,
-  // the attention feed, or the queued-payout strip. See README "Not yet wired".
-  weeklyRevenue,
-  attentionItems,
-  payoutBatches,
-} from "@/lib/dashboard";
 
 const toneDot: Record<string, string> = {
   amber: "bg-amber-500",
@@ -19,12 +12,22 @@ const toneDot: Record<string, string> = {
 const naira = (v: string | number) =>
   `₦${Number(v).toLocaleString("en-NG", { maximumFractionDigits: 0 })}`;
 
+/** Compact naira for chart axes: ₦1.2M, ₦840k, ₦0. */
+const nairaShort = (v: number) => {
+  if (v >= 1_000_000) return `₦${(v / 1_000_000).toFixed(1)}M`;
+  if (v >= 1_000) return `₦${Math.round(v / 1_000)}k`;
+  return `₦${Math.round(v)}`;
+};
+
 type Overview = {
   gmv: string;
   orders: number;
   users: number;
   pendingPayouts: string;
   attribution: { channel: string; orders: number }[];
+  weekRevenue: string;
+  revenueSeries: { day: string; value: string }[];
+  attention: { pendingProducts: number; payoutsInReview: number; openTickets: number };
 };
 
 type OrderRow = {
@@ -36,6 +39,15 @@ type OrderRow = {
   createdAt: string;
 };
 
+type PayoutBatch = {
+  ref: string;
+  audience: string;
+  status: string;
+  recipients: number;
+  total: string;
+  scheduledDate: string | null;
+};
+
 const CHANNEL_COLOR: Record<string, string> = {
   AFFILIATE: "bg-brand",
   INFLUENCER: "bg-[#6d3fa0]",
@@ -43,9 +55,10 @@ const CHANNEL_COLOR: Record<string, string> = {
 };
 
 export default async function CommandCentre() {
-  const [overview, orders] = await Promise.all([
+  const [overview, orders, payouts] = await Promise.all([
     apiFetchSafe<Overview>("/admin/overview"),
     apiFetchSafe<OrderRow[]>("/admin/orders"),
+    apiFetchSafe<PayoutBatch[]>("/admin/payouts"),
   ]);
 
   const stats = [
@@ -64,8 +77,36 @@ export default async function CommandCentre() {
 
   const recentOrders = (orders ?? []).slice(0, 5);
 
-  const peak = Math.max(...weeklyRevenue.map((d) => d.value));
+  // Real 7-day revenue series from the API (naira numbers).
+  const series = (overview?.revenueSeries ?? []).map((d) => ({
+    day: d.day,
+    value: Number(d.value),
+  }));
+  const peak = Math.max(1, ...series.map((d) => d.value));
   const gridLines = [0, 0.25, 0.5, 0.75, 1];
+
+  // Attention feed built from live counts — only shown when there's something.
+  const attention = [
+    overview?.attention.pendingProducts
+      ? { text: `${overview.attention.pendingProducts} product${overview.attention.pendingProducts > 1 ? "s" : ""} awaiting review`, href: "/products", tone: "amber" }
+      : null,
+    overview?.attention.payoutsInReview
+      ? { text: `${overview.attention.payoutsInReview} payout batch${overview.attention.payoutsInReview > 1 ? "es" : ""} to review`, href: "/payouts", tone: "red" }
+      : null,
+    overview?.attention.openTickets
+      ? { text: `${overview.attention.openTickets} open support ticket${overview.attention.openTickets > 1 ? "s" : ""}`, href: "/support", tone: "blue" }
+      : null,
+  ].filter(Boolean) as { text: string; href: string; tone: string }[];
+
+  // Real payout batches still awaiting action (review / scheduled / held).
+  const queuedPayouts = (payouts ?? [])
+    .filter((b) => ["REVIEW", "SCHEDULED", "HELD"].includes(b.status))
+    .slice(0, 4);
+  const payoutStatusLabel: Record<string, string> = {
+    REVIEW: "In review",
+    SCHEDULED: "Scheduled",
+    HELD: "On hold",
+  };
 
   return (
     <>
@@ -102,16 +143,18 @@ export default async function CommandCentre() {
           <div className="flex items-center justify-between">
             <div>
               <p className="font-bold">Revenue this week</p>
-              <p className="mt-0.5 text-sm text-ink/50">Total revenue earned from all streams</p>
+              <p className="mt-0.5 text-sm text-ink/50">Paid orders over the last 7 days</p>
             </div>
-            <span className="text-lg font-bold text-brand">₦8,420,000</span>
+            <span className="text-lg font-bold text-brand">
+              {overview ? naira(overview.weekRevenue) : "—"}
+            </span>
           </div>
 
           <div className="mt-6 flex gap-4">
             {/* y-axis labels */}
             <div className="flex h-52 flex-col justify-between py-1 text-right text-[11px] text-ink/40">
               {[...gridLines].reverse().map((g) => (
-                <span key={g}>₦{(peak * g * 0.04).toFixed(1)}M</span>
+                <span key={g}>{nairaShort(peak * g)}</span>
               ))}
             </div>
 
@@ -126,10 +169,10 @@ export default async function CommandCentre() {
                 </div>
                 {/* bars */}
                 <div className="absolute inset-0 flex items-end gap-3">
-                  {weeklyRevenue.map((d) => (
-                    <div key={d.day} className="group flex h-full flex-1 flex-col items-center justify-end">
+                  {series.map((d, i) => (
+                    <div key={`${d.day}-${i}`} className="group flex h-full flex-1 flex-col items-center justify-end">
                       <span className="mb-1.5 text-[11px] font-bold text-ink/0 transition-colors group-hover:text-ink/70">
-                        ₦{(d.value * 0.04).toFixed(1)}M
+                        {nairaShort(d.value)}
                       </span>
                       <div
                         className="w-full rounded-t-lg bg-brand/85 transition-all group-hover:bg-brand"
@@ -141,8 +184,8 @@ export default async function CommandCentre() {
               </div>
               {/* x-axis labels */}
               <div className="mt-2 flex gap-3">
-                {weeklyRevenue.map((d) => (
-                  <span key={d.day} className="flex-1 text-center text-xs text-ink/45">
+                {series.map((d, i) => (
+                  <span key={`${d.day}-${i}`} className="flex-1 text-center text-xs text-ink/45">
                     {d.day}
                   </span>
                 ))}
@@ -180,7 +223,7 @@ export default async function CommandCentre() {
               <p className="font-bold">Attention required</p>
             </div>
             <div className="mt-4 flex-1 space-y-2.5">
-              {attentionItems.map((it) => (
+              {attention.map((it) => (
                 <Link
                   key={it.text}
                   href={it.href}
@@ -193,6 +236,11 @@ export default async function CommandCentre() {
                   <Icon name="chevron-right" size={16} className="text-white/50" />
                 </Link>
               ))}
+              {attention.length === 0 && (
+                <p className="flex items-center gap-2 rounded-xl bg-white/5 px-4 py-3 text-sm text-white/60">
+                  <Icon name="check" size={16} className="text-brand" /> All caught up — nothing needs attention.
+                </p>
+              )}
             </div>
           </div>
           <div className="h-[3px] w-full bg-brand" />
@@ -208,26 +256,31 @@ export default async function CommandCentre() {
             </Link>
           </div>
           <div className="mt-4 flex-1 divide-y divide-ink/8">
-            {payoutBatches.map((b) => (
-              <div key={b.ref} className="flex items-center justify-between gap-4 py-3">
+            {queuedPayouts.map((b) => (
+              <Link
+                key={b.ref}
+                href={`/payouts/${b.ref}`}
+                className="flex items-center justify-between gap-4 py-3 transition-colors hover:opacity-80"
+              >
                 <div>
-                  <p className="text-sm font-bold">{b.audience}</p>
+                  <p className="text-sm font-bold capitalize">{b.audience.toLowerCase()}</p>
                   <p className="text-xs text-ink/50">
-                    {b.ref} · {b.count} recipients
+                    {b.ref} · {b.recipients} recipient{b.recipients === 1 ? "" : "s"}
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm font-bold">{b.amount}</p>
+                  <p className="text-sm font-bold">{naira(b.total)}</p>
                   <span
-                    className={`text-xs font-bold ${
-                      b.status === "Queued" ? "text-brand" : "text-amber-600"
-                    }`}
+                    className={`text-xs font-bold ${b.status === "REVIEW" ? "text-brand" : "text-amber-600"}`}
                   >
-                    {b.status}
+                    {payoutStatusLabel[b.status] ?? b.status}
                   </span>
                 </div>
-              </div>
+              </Link>
             ))}
+            {queuedPayouts.length === 0 && (
+              <p className="py-6 text-center text-sm text-ink/45">No payout batches queued.</p>
+            )}
           </div>
           </div>
           <div className="h-[3px] w-full bg-brand" />
