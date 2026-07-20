@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import Icon from "@/components/Icon";
 import ActionButton from "@/components/ActionButton";
+import { useConfirm } from "@/components/ConfirmDialog";
 import {
   approveVendor,
   messageVendor,
@@ -307,10 +308,19 @@ function RejectModal({ name, vendorId, onClose }: { name: string; vendorId: stri
   const [reason, setReason] = useState("");
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
+  const confirm = useConfirm();
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!window.confirm(`Reject ${name}? Their listings stop being sellable.`)) return;
+    if (
+      !(await confirm({
+        title: "Reject vendor",
+        message: `Reject ${name}? Their listings stop being sellable.`,
+        confirmLabel: "Reject",
+        tone: "danger",
+      }))
+    )
+      return;
     setError("");
     startTransition(async () => {
       const res = await rejectVendor(vendorId, reason);

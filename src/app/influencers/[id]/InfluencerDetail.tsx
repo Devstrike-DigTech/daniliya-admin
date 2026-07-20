@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import Icon from "@/components/Icon";
 import ActionButton from "@/components/ActionButton";
+import { useConfirm } from "@/components/ConfirmDialog";
 import {
   approveInfluencer,
   messageInfluencer,
@@ -310,10 +311,19 @@ function RejectModal({ name, influencerId, onClose }: { name: string; influencer
   const [reason, setReason] = useState("");
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
+  const confirm = useConfirm();
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!window.confirm(`Reject ${name}? They can no longer be booked for campaigns.`)) return;
+    if (
+      !(await confirm({
+        title: "Reject influencer",
+        message: `Reject ${name}? They can no longer be booked for campaigns.`,
+        confirmLabel: "Reject",
+        tone: "danger",
+      }))
+    )
+      return;
     setError("");
     startTransition(async () => {
       const res = await rejectInfluencer(influencerId, reason);

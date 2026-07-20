@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Icon from "@/components/Icon";
+import { useConfirm } from "@/components/ConfirmDialog";
 import { advanceOrder } from "../actions";
 
 /** The single next step for each fulfilment stage, matching the API ladder. */
@@ -36,15 +37,16 @@ export default function FulfilmentControl({
   const [eta, setEta] = useState("");
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
+  const confirm = useConfirm();
 
   const next = NEXT[status];
   if (!next) return null; // DELIVERED / COMPLETED / reversed — nothing further here
 
-  const run = (
+  const run = async (
     fn: () => Promise<{ ok: true } | { ok: false; error: string }>,
     ask?: string,
   ) => {
-    if (ask && !window.confirm(ask)) return;
+    if (ask && !(await confirm({ message: ask }))) return;
     setError("");
     startTransition(async () => {
       const res = await fn();

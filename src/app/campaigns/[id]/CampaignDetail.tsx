@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import Icon from "@/components/Icon";
+import { useConfirm } from "@/components/ConfirmDialog";
 import { approveSubmission, endCampaign, pauseCampaign, rejectSubmission, resumeCampaign } from "../actions";
 import { payoutLine, type AdminCampaign } from "../CampaignsView";
 
@@ -90,6 +91,7 @@ export default function CampaignDetail({
   const [copied, setCopied] = useState("");
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
+  const confirm = useConfirm();
 
   const copy = (key: string, val: string) => {
     navigator.clipboard?.writeText(val);
@@ -108,8 +110,15 @@ export default function CampaignDetail({
     });
 
   const toggleStatus = () => run(() => (paused ? resumeCampaign(c.id) : pauseCampaign(c.id)));
-  const endEarly = () => {
-    if (window.confirm("End this campaign early? Creators will no longer be able to submit posts.")) {
+  const endEarly = async () => {
+    if (
+      await confirm({
+        title: "End campaign early",
+        message: "End this campaign early? Creators will no longer be able to submit posts.",
+        confirmLabel: "End campaign",
+        tone: "danger",
+      })
+    ) {
       run(() => endCampaign(c.id));
     }
   };
@@ -321,9 +330,13 @@ function SubmissionReview({
 }) {
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
+  const confirm = useConfirm();
 
-  const run = (fn: () => Promise<{ ok: true } | { ok: false; error: string }>, ask: string) => {
-    if (!window.confirm(ask)) return;
+  const run = async (
+    fn: () => Promise<{ ok: true } | { ok: false; error: string }>,
+    ask: string,
+  ) => {
+    if (!(await confirm({ message: ask }))) return;
     setError("");
     startTransition(async () => {
       const res = await fn();

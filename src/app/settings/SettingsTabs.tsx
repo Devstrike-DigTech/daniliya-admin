@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import Icon from "@/components/Icon";
 import PasswordField from "@/components/PasswordField";
+import { useConfirm } from "@/components/ConfirmDialog";
 import { notificationSettings } from "@/lib/dashboard";
 import {
   changePassword,
@@ -332,8 +333,16 @@ function ManageModal({ member, onClose }: { member: TeamMember; onClose: () => v
     });
   };
 
-  const remove = () => {
-    if (window.confirm(`Remove ${member.name} from the admin team?`)) {
+  const confirm = useConfirm();
+  const remove = async () => {
+    if (
+      await confirm({
+        title: "Remove teammate",
+        message: `Remove ${member.name} from the admin team?`,
+        confirmLabel: "Remove",
+        tone: "danger",
+      })
+    ) {
       run(() => removeTeammate(member.id));
     }
   };

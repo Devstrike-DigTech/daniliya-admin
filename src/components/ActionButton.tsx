@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Icon from "@/components/Icon";
+import { useConfirm } from "@/components/ConfirmDialog";
 
 export type ActionResult = { ok: true; message?: string } | { ok: false; error: string };
 
@@ -33,6 +34,7 @@ export default function ActionButton({
   onDone?: (res: ActionResult) => void;
 }) {
   const router = useRouter();
+  const confirmDialog = useConfirm();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState("");
 
@@ -43,8 +45,16 @@ export default function ActionButton({
     outline: "border border-ink/15 text-ink hover:bg-ink/5",
   };
 
-  const run = () => {
-    if (confirm && !window.confirm(confirm)) return;
+  const run = async () => {
+    if (
+      confirm &&
+      !(await confirmDialog({
+        message: confirm,
+        tone: variant === "danger" ? "danger" : "default",
+        confirmLabel: typeof children === "string" ? children : "Confirm",
+      }))
+    )
+      return;
     setError("");
     startTransition(async () => {
       const res = await action();

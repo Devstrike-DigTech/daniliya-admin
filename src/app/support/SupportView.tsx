@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Icon from "@/components/Icon";
+import { useConfirm } from "@/components/ConfirmDialog";
 import { assignTicket, closeTicket, replyToTicket } from "./actions";
 
 export type TicketSummary = {
@@ -162,6 +163,7 @@ function TicketActions({ ticketRef, status }: { ticketRef: string; status: strin
   const [body, setBody] = useState("");
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
+  const confirm = useConfirm();
 
   const closed = status === "CLOSED" || status === "RESOLVED";
 
@@ -213,8 +215,15 @@ function TicketActions({ ticketRef, status }: { ticketRef: string; status: strin
         </button>
         <button
           disabled={pending}
-          onClick={() => {
-            if (!window.confirm("Close this ticket? The customer will not be able to reply on it.")) return;
+          onClick={async () => {
+            if (
+              !(await confirm({
+                title: "Close ticket",
+                message: "Close this ticket? The customer will not be able to reply on it.",
+                confirmLabel: "Close ticket",
+              }))
+            )
+              return;
             run(() => closeTicket(ticketRef));
           }}
           className="rounded-xl bg-green-600 px-6 py-3 text-sm font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-60"

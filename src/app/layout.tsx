@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { DM_Sans } from "next/font/google";
 import DashboardShell, { type ShellUser } from "@/components/DashboardShell";
+import ConfirmProvider from "@/components/ConfirmDialog";
 import { apiFetchSafe } from "@/lib/api";
 import "./globals.css";
 
@@ -29,7 +30,9 @@ export default async function RootLayout({
   return (
     <html lang="en" className={`${dmSans.variable} h-full antialiased`}>
       <body className="min-h-full">
-        <DashboardShell user={me}>{children}</DashboardShell>
+        <ConfirmProvider>
+          <DashboardShell user={me}>{children}</DashboardShell>
+        </ConfirmProvider>
       </body>
     </html>
   );

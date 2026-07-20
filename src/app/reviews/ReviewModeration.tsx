@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useConfirm } from "@/components/ConfirmDialog";
 import { flagReview, keepReview, removeReview } from "./actions";
 
 /**
@@ -16,9 +17,10 @@ export default function ReviewModeration({ id, status }: { id: string; status: s
   const router = useRouter();
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
+  const confirm = useConfirm();
 
-  const run = (fn: () => Promise<{ ok: true } | { ok: false; error: string }>, ask?: string) => {
-    if (ask && !window.confirm(ask)) return;
+  const run = async (fn: () => Promise<{ ok: true } | { ok: false; error: string }>, ask?: string) => {
+    if (ask && !(await confirm({ message: ask }))) return;
     setError("");
     startTransition(async () => {
       const res = await fn();
