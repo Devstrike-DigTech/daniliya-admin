@@ -27,10 +27,14 @@ export default async function EditProductPage({
         title: product.title,
         description: product.description ?? "",
         price: product.price,
+        costPrice: product.costPrice ?? "",
         stockQuantity: product.stockQuantity,
         category: product.category ?? "",
         vendorId: product.vendorId,
         commissionRate: product.commissionRate,
+        affiliateEligible: product.affiliateEligible,
+        influencerEligible: product.influencerEligible,
+        commissionMode: product.commissionMode,
         imageUrls: product.images.map((i) => i.url),
       }}
     />

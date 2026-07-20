@@ -58,10 +58,14 @@ export type ProductInput = {
   title: string;
   description?: string;
   price: number;
+  costPrice?: number;
   stockQuantity: number;
   category?: string;
   vendorId?: string | null;
   commissionRate?: number;
+  affiliateEligible?: boolean;
+  influencerEligible?: boolean;
+  commissionMode?: "INCLUSIVE" | "ADD_ON";
   publish?: boolean;
   imageUrls?: string[];
 };

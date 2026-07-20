@@ -16,7 +16,11 @@ export type AdminProductDetail = {
   slug: string;
   description: string | null;
   price: string;
+  costPrice: string | null;
   commissionRate: string;
+  affiliateEligible: boolean;
+  influencerEligible: boolean;
+  commissionMode: "INCLUSIVE" | "ADD_ON";
   stockQuantity: number;
   category: string | null;
   status: string;
@@ -26,6 +30,13 @@ export type AdminProductDetail = {
   vendor: { id: string; businessName: string } | null;
   images: { id: string; url: string; sortOrder: number }[];
   _count: { orderItems: number; reviews: number };
+  economics: {
+    unitsSold: number;
+    revenue: string;
+    cost: string;
+    perkCommissions: string;
+    profit: string;
+  };
 };
 
 const naira = (v: string | number) =>
@@ -61,6 +72,11 @@ export default function ProductDetail({ product: p }: { product: AdminProductDet
   // local placeholders — these are not product data.
   const remote = p.images.map((img) => img.url);
   const gallery = remote.length > 0 ? remote : productGallery(p.title);
+
+  const perUnit =
+    p.economics.unitsSold > 0
+      ? Number(p.economics.profit) / p.economics.unitsSold
+      : null;
 
   return (
     <>
@@ -104,19 +120,19 @@ export default function ProductDetail({ product: p }: { product: AdminProductDet
 
       {/* Key stats */}
       <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatFoot label="Sales Price" value={naira(p.price)} />
+        <StatFoot label="Sale price" value={naira(p.price)} />
+        <StatFoot label={p.vendorId ? "Vendor / cost price" : "Cost price"} value={p.costPrice ? naira(p.costPrice) : "—"} />
         <StatFoot label="Stock on hand" value={`${p.stockQuantity}`} />
-        <StatFoot label="Minimum stock level" value="—" />
-        <StatFoot label="Profit per unit" value="—" />
+        <StatFoot label="Profit per unit sold" value={perUnit === null ? "—" : naira(perUnit)} />
       </div>
 
-      {/* Sales performance */}
+      {/* Sales performance — real, from paid orders */}
       <p className="mt-8 text-lg font-bold text-ink/70">Sales performance</p>
       <div className="mt-3 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatFoot label="Units Sold" value="—" />
-        <StatFoot label="Revenue" value="—" />
-        <StatFoot label="Total Profit" value="—" />
-        <StatFoot label="Channels" value="—" />
+        <StatFoot label="Units sold" value={`${p.economics.unitsSold}`} />
+        <StatFoot label="Revenue" value={naira(p.economics.revenue)} />
+        <StatFoot label="Cost + commissions" value={naira(Number(p.economics.cost) + Number(p.economics.perkCommissions))} />
+        <StatFoot label="Total profit" value={naira(p.economics.profit)} />
       </div>
 
       {/* Listing status + delist/relist */}

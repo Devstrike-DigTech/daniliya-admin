@@ -44,7 +44,13 @@ const naira = (v: string | number) =>
 const scopeOf = (p: AdminProduct): ProductScope => (p.vendorId ? "Vendor" : "Platform");
 const sellerOf = (p: AdminProduct) => p.vendor?.businessName ?? "Daniliya";
 
-export default function ProductsView({ products }: { products: AdminProduct[] }) {
+export default function ProductsView({
+  products,
+  finance,
+}: {
+  products: AdminProduct[];
+  finance?: { totalSales: string; totalProfit: string } | null;
+}) {
   const router = useRouter();
   const [scope, setScope] = useState<ProductScope>("Platform");
   const [query, setQuery] = useState("");
@@ -111,9 +117,8 @@ export default function ProductsView({ products }: { products: AdminProduct[] })
       <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <SummaryCard label="Total products" value={`${summary.total}`} icon="package" accent="bg-brand" soft="bg-brand/15 text-brand" />
         <SummaryCard label="Total published" value={`${summary.published}`} icon="check" accent="bg-green-500" soft="bg-green-500/15 text-green-600" />
-        {/* No sales / profit aggregates are exposed by /admin/products — intentionally blank. */}
-        <SummaryCard label="Total Sales from products" value="—" icon="chart" accent="bg-orange-500" soft="bg-orange-500/15 text-orange-600" />
-        <SummaryCard label="Total profit from sales" value="—" icon="wallet" accent="bg-[#6d3fa0]" soft="bg-[#6d3fa0]/15 text-[#6d3fa0]" />
+        <SummaryCard label="Total sales from products" value={finance ? naira(finance.totalSales) : "—"} icon="chart" accent="bg-orange-500" soft="bg-orange-500/15 text-orange-600" />
+        <SummaryCard label="Total profit from sales" value={finance ? naira(finance.totalProfit) : "—"} icon="wallet" accent="bg-[#6d3fa0]" soft="bg-[#6d3fa0]/15 text-[#6d3fa0]" />
       </div>
 
       {/* Scope toggle */}
