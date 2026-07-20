@@ -18,6 +18,7 @@ export const navGroups = [
   {
     group: "People",
     items: [
+      { href: "/customers", label: "Customers", icon: "users" },
       { href: "/affiliates", label: "Affiliates", icon: "trending-up" },
       { href: "/influencers", label: "Influencers", icon: "megaphone" },
       { href: "/vendors", label: "Vendors", icon: "store" },
