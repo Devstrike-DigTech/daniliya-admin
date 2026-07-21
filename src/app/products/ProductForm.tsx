@@ -53,6 +53,7 @@ export default function ProductForm({
   );
   const [vendorId, setVendorId] = useState(initial?.vendorId ?? "");
   const [title, setTitle] = useState(initial?.title ?? "");
+  const [slug, setSlug] = useState("");
   const [description, setDescription] = useState(initial?.description ?? "");
   const [price, setPrice] = useState(initial?.price ?? "");
   const [costPrice, setCostPrice] = useState(initial?.costPrice ?? "");
@@ -80,6 +81,7 @@ export default function ProductForm({
 
     const input: ProductInput = {
       title: title.trim(),
+      ...(mode === "create" && slug.trim() ? { slug: slug.trim() } : {}),
       description: description.trim() || undefined,
       price: Number(price),
       stockQuantity: Number(stock),
@@ -165,6 +167,15 @@ export default function ProductForm({
                 <label className={labelCls}>Title</label>
                 <input className={inputCls} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Lavender Floor Cleaner 5L" />
               </div>
+              {mode === "create" && (
+                <div>
+                  <label className={labelCls}>URL slug (optional)</label>
+                  <input className={inputCls} value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="Auto from title — e.g. builders-handbook" />
+                  <p className="mt-1 text-xs text-ink/50">
+                    Sets the storefront address (/shop/<span className="font-mono">{slug.trim() || "slug"}</span>). Leave blank to generate it from the title.
+                  </p>
+                </div>
+              )}
               <div>
                 <label className={labelCls}>Description</label>
                 <textarea className={`${inputCls} min-h-[110px]`} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What is it, and why should someone buy it?" />

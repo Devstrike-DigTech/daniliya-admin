@@ -9,10 +9,15 @@ import { API_URL } from "@/lib/api";
 export async function POST(req: Request) {
   const { email } = await req.json().catch(() => ({ email: "" }));
 
+  // Tell the API where this portal's reset page lives so it can send a
+  // one-click link. The API only honours origins in its CORS allowlist.
+  const origin = req.headers.get("origin");
+  const resetUrl = origin ? `${origin}/reset-password` : undefined;
+
   const res = await fetch(`${API_URL}/auth/forgot-password`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email }),
+    body: JSON.stringify({ email, ...(resetUrl ? { resetUrl } : {}) }),
     cache: "no-store",
   });
   const body = await res.json().catch(() => null);

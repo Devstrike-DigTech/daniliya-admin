@@ -56,6 +56,7 @@ export async function rejectProduct(id: string, reason?: string): Promise<Action
 /** The product fields an admin form submits (create and edit share this shape). */
 export type ProductInput = {
   title: string;
+  slug?: string;
   description?: string;
   price: number;
   costPrice?: number;
