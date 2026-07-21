@@ -12,6 +12,31 @@ const label = "mb-1.5 block text-sm font-bold";
 export default function ForgotPasswordForm() {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setBusy(true);
+    try {
+      const res = await fetch("/api/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim() }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        setError(data?.error ?? "Could not send the reset link. Try again.");
+        return;
+      }
+      setSent(true);
+    } catch {
+      setError("Could not reach the server. Check your connection and try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <AuthSplit>
@@ -26,13 +51,7 @@ export default function ForgotPasswordForm() {
             Enter the email linked to your account and we&apos;ll send you a link
             to reset it.
           </p>
-          <form
-            className="mt-7 space-y-4"
-            onSubmit={(e) => {
-              e.preventDefault();
-              setSent(true);
-            }}
-          >
+          <form className="mt-7 space-y-4" onSubmit={submit}>
             <div>
               <label className={label}>
                 Email <span className="text-red-500">*</span>
@@ -46,8 +65,16 @@ export default function ForgotPasswordForm() {
                 required
               />
             </div>
-            <button className="w-full rounded-xl bg-brand py-3.5 text-sm font-bold text-white transition-opacity hover:opacity-90">
-              Send reset link
+            {error && (
+              <p className="rounded-xl bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
+                {error}
+              </p>
+            )}
+            <button
+              disabled={busy}
+              className="w-full rounded-xl bg-brand py-3.5 text-sm font-bold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {busy ? "Sending…" : "Send reset link"}
             </button>
           </form>
           <p className="mt-6 text-sm text-ink/60">
@@ -66,17 +93,16 @@ export default function ForgotPasswordForm() {
             Check your <span className="text-brand">email</span>
           </h1>
           <p className="mt-2 text-sm text-ink/60">
-            We sent a password reset link to{" "}
-            <span className="font-bold text-ink">{email || "your email"}</span>.
-            The link expires in 30 minutes.
+            If{" "}
+            <span className="font-bold text-ink">{email || "that email"}</span>{" "}
+            is registered, we&apos;ve sent it a reset code. It expires in 1 hour.
           </p>
 
-          {/* Demo shortcut: a real build delivers this link by email */}
           <Link
             href="/reset-password"
             className="mt-7 block w-full rounded-xl bg-brand py-3.5 text-center text-sm font-bold text-white transition-opacity hover:opacity-90"
           >
-            Open the reset link
+            Enter your reset code
           </Link>
           <button
             onClick={() => setSent(false)}
