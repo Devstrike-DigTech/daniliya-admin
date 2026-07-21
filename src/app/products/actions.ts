@@ -128,3 +128,27 @@ export async function relistProduct(id: string): Promise<ActionResult> {
     return failed(e);
   }
 }
+
+/** POST /admin/products/{id}/feature — make this the storefront Builder's Handbook. */
+export async function featureProduct(id: string): Promise<ActionResult> {
+  try {
+    await apiFetch(`/admin/products/${id}/feature`, { method: "POST" });
+    revalidatePath("/products");
+    revalidatePath(`/products/${id}`);
+    return { ok: true };
+  } catch (e) {
+    return failed(e);
+  }
+}
+
+/** POST /admin/products/{id}/unfeature — remove it as the featured book. */
+export async function unfeatureProduct(id: string): Promise<ActionResult> {
+  try {
+    await apiFetch(`/admin/products/${id}/unfeature`, { method: "POST" });
+    revalidatePath("/products");
+    revalidatePath(`/products/${id}`);
+    return { ok: true };
+  } catch (e) {
+    return failed(e);
+  }
+}

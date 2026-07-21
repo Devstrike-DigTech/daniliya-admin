@@ -7,7 +7,7 @@ import Icon from "@/components/Icon";
 import ActionButton from "@/components/ActionButton";
 import { productGallery } from "@/lib/dashboard";
 import ProductModeration from "../ProductModeration";
-import { delistProduct, relistProduct } from "../actions";
+import { delistProduct, relistProduct, featureProduct, unfeatureProduct } from "../actions";
 
 export type AdminProductDetail = {
   id: string;
@@ -21,6 +21,7 @@ export type AdminProductDetail = {
   affiliateEligible: boolean;
   influencerEligible: boolean;
   commissionMode: "INCLUSIVE" | "ADD_ON";
+  isFeaturedBook: boolean;
   stockQuantity: number;
   category: string | null;
   status: string;
@@ -171,6 +172,48 @@ export default function ProductDetail({ product: p }: { product: AdminProductDet
             </ActionButton>
           )}
         </div>
+      </div>
+
+      {/* Featured book — designate this product as the storefront Builder's Handbook */}
+      <div className="mt-6 rounded-2xl border border-ink/10 bg-white p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="flex items-center gap-2 font-bold">
+              <Icon name="book" size={16} className="text-brand" />
+              Builder&apos;s Handbook (featured book)
+            </p>
+            <p className="mt-1 max-w-md text-xs text-ink/55">
+              {p.isFeaturedBook
+                ? "This is the product shown as the Builder's Handbook on the storefront. Its title, image and description power the shop hero."
+                : "Show this product as the Builder's Handbook on the storefront. Only one product can be featured — setting this replaces any current one."}
+            </p>
+          </div>
+          {p.isFeaturedBook ? (
+            <div className="flex items-center gap-3">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-brand/15 px-3 py-1 text-xs font-bold text-brand">
+                <Icon name="check" size={13} /> Featured
+              </span>
+              <ActionButton action={() => unfeatureProduct(p.id)} icon="close" variant="outline">
+                Remove
+              </ActionButton>
+            </div>
+          ) : (
+            <ActionButton
+              action={() => featureProduct(p.id)}
+              icon="book"
+              variant="primary"
+              confirm={`Show "${p.title}" as the Builder's Handbook on the storefront? It replaces any product currently featured.`}
+            >
+              Set as the book
+            </ActionButton>
+          )}
+        </div>
+        {p.isFeaturedBook && p.status !== "ACTIVE" && (
+          <p className="mt-3 rounded-xl bg-amber-50 px-4 py-2.5 text-xs font-bold text-amber-700">
+            It&apos;s featured but {p.status.toLowerCase()} — the storefront shows it as
+            &ldquo;currently unavailable&rdquo; until you publish it.
+          </p>
+        )}
       </div>
 
       {/* Approve / reject a vendor product that is awaiting review. */}
