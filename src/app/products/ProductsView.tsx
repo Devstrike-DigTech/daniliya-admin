@@ -24,6 +24,7 @@ export type AdminProduct = {
   createdAt: string;
   updatedAt: string;
   vendor: { businessName: string } | null;
+  images: { url: string }[];
 };
 
 type ProductScope = "Platform" | "Vendor";
@@ -196,7 +197,14 @@ export default function ProductsView({
         {rows.map((p) => (
           <div key={p.id} className="overflow-hidden rounded-2xl border border-ink/10 bg-white">
             <div className="relative aspect-[16/10] bg-ink/[0.04]">
-              <Image src={productImage(p.title)} alt={p.title} fill sizes="(max-width: 640px) 100vw, 33vw" className="object-cover" />
+              <Image
+                src={p.images[0]?.url ?? productImage(p.title)}
+                alt={p.title}
+                fill
+                sizes="(max-width: 640px) 100vw, 33vw"
+                className="object-cover"
+                unoptimized={p.images.length > 0}
+              />
             </div>
             <div className="p-5">
               <p className="text-xs font-bold uppercase tracking-wide text-ink/40">{sellerOf(p)}</p>
@@ -231,9 +239,19 @@ export default function ProductsView({
               <button onClick={() => setModal(null)} className="text-ink/40 hover:text-ink"><Icon name="close" size={20} /></button>
             </div>
             <div className="mt-4 grid grid-cols-4 gap-3">
-              {productGallery(modal.title).map((src, k) => (
+              {(modal.images.length > 0
+                ? modal.images.map((i) => i.url)
+                : productGallery(modal.title)
+              ).map((src, k) => (
                 <div key={k} className="relative aspect-square overflow-hidden rounded-xl">
-                  <Image src={src} alt={`${modal.title} ${k + 1}`} fill sizes="160px" className="object-cover" />
+                  <Image
+                    src={src}
+                    alt={`${modal.title} ${k + 1}`}
+                    fill
+                    sizes="160px"
+                    className="object-cover"
+                    unoptimized={modal.images.length > 0}
+                  />
                 </div>
               ))}
             </div>
