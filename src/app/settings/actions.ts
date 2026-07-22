@@ -80,3 +80,57 @@ export async function updatePlatformConfig(values: Record<string, string>): Prom
     return failed(e);
   }
 }
+
+// ── Bookable services (verticals) ───────────────────────────────────────────
+
+/** A service vertical, as returned by GET /admin/services. */
+export type ServiceVertical = {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  isActive: boolean;
+  sortOrder: number;
+  bookings: number;
+  quoteRequests: number;
+};
+
+/** POST /admin/services — add a bookable service. */
+export async function createService(input: {
+  name: string;
+  description?: string;
+  isActive?: boolean;
+}): Promise<ActionResult> {
+  try {
+    await apiFetch("/admin/services", { method: "POST", body: JSON.stringify(input) });
+    revalidatePath("/settings");
+    return { ok: true };
+  } catch (e) {
+    return failed(e);
+  }
+}
+
+/** PATCH /admin/services/{id} — edit name/description or flip active. */
+export async function updateService(
+  id: string,
+  input: { name?: string; description?: string; isActive?: boolean },
+): Promise<ActionResult> {
+  try {
+    await apiFetch(`/admin/services/${id}`, { method: "PATCH", body: JSON.stringify(input) });
+    revalidatePath("/settings");
+    return { ok: true };
+  } catch (e) {
+    return failed(e);
+  }
+}
+
+/** DELETE /admin/services/{id} — refused by the API if it has booking history. */
+export async function deleteService(id: string): Promise<ActionResult> {
+  try {
+    await apiFetch(`/admin/services/${id}`, { method: "DELETE" });
+    revalidatePath("/settings");
+    return { ok: true };
+  } catch (e) {
+    return failed(e);
+  }
+}

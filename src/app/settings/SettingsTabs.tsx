@@ -8,10 +8,14 @@ import { notificationSettings } from "@/lib/dashboard";
 import {
   changePassword,
   changeTeammateRole,
+  createService,
+  deleteService,
   inviteTeammate,
   removeTeammate,
   updatePlatformConfig,
+  updateService,
   type AdminRole,
+  type ServiceVertical,
 } from "./actions";
 
 /** GET /auth/me */
@@ -37,7 +41,7 @@ export type TeamMember = {
 /** GET /admin/settings/config */
 export type PlatformConfigEntry = { key: string; value: string };
 
-const TABS = ["General", "Team & Roles", "Notification settings"] as const;
+const TABS = ["General", "Services", "Team & Roles", "Notification settings"] as const;
 const label = "mb-1.5 block text-sm font-bold";
 const input = "w-full rounded-xl border border-ink/15 bg-white px-4 py-3 text-sm outline-none transition-colors placeholder:text-ink/35 focus:border-brand";
 const card = "rounded-2xl border border-ink/10 bg-white p-6";
@@ -53,10 +57,12 @@ export default function SettingsTabs({
   me,
   team,
   config,
+  services,
 }: {
   me: CurrentUser | null;
   team: TeamMember[];
   config: PlatformConfigEntry[];
+  services: ServiceVertical[];
 }) {
   const [tab, setTab] = useState<(typeof TABS)[number]>("General");
   const [invite, setInvite] = useState(false);
@@ -99,6 +105,12 @@ export default function SettingsTabs({
           <PlatformConfigCard config={config} />
 
           <SecurityCard />
+        </div>
+      )}
+
+      {tab === "Services" && (
+        <div className="mt-6">
+          <ServicesCard services={services} />
         </div>
       )}
 
@@ -169,6 +181,179 @@ export default function SettingsTabs({
       {invite && <InviteModal onClose={() => setInvite(false)} />}
       {managing && <ManageModal member={managing} onClose={() => setManaging(null)} />}
     </>
+  );
+}
+
+/**
+ * Manage the bookable services (verticals). Active ones appear in the
+ * storefront "Get a quote" service-type dropdown; inactive ones are hidden
+ * there (shown as "coming soon" on the marketing site).
+ */
+function ServicesCard({ services }: { services: ServiceVertical[] }) {
+  const confirm = useConfirm();
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const run = async (
+    id: string,
+    fn: () => Promise<{ ok: true } | { ok: false; error: string }>,
+    okText?: string,
+  ) => {
+    setPendingId(id);
+    setMsg(null);
+    const res = await fn();
+    setPendingId(null);
+    if (!res.ok) setMsg({ ok: false, text: res.error });
+    else if (okText) setMsg({ ok: true, text: okText });
+  };
+
+  const toggle = (s: ServiceVertical) =>
+    run(
+      s.id,
+      () => updateService(s.id, { isActive: !s.isActive }),
+      `${s.name} is now ${s.isActive ? "hidden from" : "bookable in"} the quote form.`,
+    );
+
+  const remove = async (s: ServiceVertical) => {
+    if (
+      await confirm({
+        title: "Delete service",
+        message: `Delete "${s.name}"? This can't be undone. If it has booking history, deactivate it instead.`,
+        confirmLabel: "Delete",
+        tone: "danger",
+      })
+    ) {
+      run(s.id, () => deleteService(s.id));
+    }
+  };
+
+  const active = services.filter((s) => s.isActive).length;
+
+  return (
+    <div className="space-y-6">
+      <div className={card}>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-lg font-bold">Bookable services</p>
+            <p className="text-sm text-ink/50">
+              {services.length} service{services.length === 1 ? "" : "s"} · {active} active in
+              the &ldquo;Get a quote&rdquo; dropdown
+            </p>
+          </div>
+        </div>
+
+        {msg && (
+          <p className={`mt-4 rounded-xl px-4 py-3 text-sm font-bold ${msg.ok ? "bg-green-50 text-green-700" : "bg-red-50 text-red-600"}`}>
+            {msg.text}
+          </p>
+        )}
+
+        <div className="mt-5 divide-y divide-ink/8">
+          {services.map((s) => (
+            <div key={s.id} className="flex flex-wrap items-center gap-4 py-4">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2.5">
+                  <p className="font-bold">{s.name}</p>
+                  <span className="rounded-full bg-ink/8 px-2.5 py-0.5 text-xs font-bold text-ink/50">/{s.slug}</span>
+                  {!s.isActive && (
+                    <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-700">Coming soon</span>
+                  )}
+                </div>
+                {s.description && <p className="mt-0.5 truncate text-sm text-ink/55">{s.description}</p>}
+                <p className="mt-0.5 text-xs text-ink/40">
+                  {s.bookings} booking{s.bookings === 1 ? "" : "s"} · {s.quoteRequests} quote{s.quoteRequests === 1 ? "" : "s"}
+                </p>
+              </div>
+
+              {/* Active toggle */}
+              <button
+                type="button"
+                onClick={() => toggle(s)}
+                disabled={pendingId === s.id}
+                role="switch"
+                aria-checked={s.isActive}
+                aria-label={`${s.isActive ? "Deactivate" : "Activate"} ${s.name}`}
+                className={`relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-50 ${s.isActive ? "bg-brand" : "bg-ink/20"}`}
+              >
+                <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${s.isActive ? "left-0.5 translate-x-5" : "left-0.5"}`} />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => remove(s)}
+                disabled={pendingId === s.id}
+                className="text-ink/35 transition-colors hover:text-red-500 disabled:opacity-50"
+                aria-label={`Delete ${s.name}`}
+              >
+                <Icon name="ban" size={18} />
+              </button>
+            </div>
+          ))}
+          {services.length === 0 && (
+            <p className="py-10 text-center text-sm text-ink/45">
+              No services yet. Add one below to make it bookable.
+            </p>
+          )}
+        </div>
+      </div>
+
+      <AddServiceCard />
+    </div>
+  );
+}
+
+/** POST /admin/services — add a new bookable service. */
+function AddServiceCard() {
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [isActive, setIsActive] = useState(true);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setMsg(null);
+    startTransition(async () => {
+      const res = await createService({
+        name: name.trim(),
+        description: description.trim() || undefined,
+        isActive,
+      });
+      if (res.ok) {
+        setMsg({ ok: true, text: `“${name.trim()}” added.` });
+        setName("");
+        setDescription("");
+        setIsActive(true);
+      } else {
+        setMsg({ ok: false, text: res.error });
+      }
+    });
+  };
+
+  return (
+    <form onSubmit={submit} className={card}>
+      <p className="text-lg font-bold">Add a service</p>
+      <p className="text-sm text-ink/50">Its URL slug is generated from the name.</p>
+      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <div>
+          <label className={label}>Service name</label>
+          <input className={input} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Plumbing" required />
+        </div>
+        <div>
+          <label className={label}>Short description</label>
+          <input className={input} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="One line shown on the site" />
+        </div>
+      </div>
+      <label className="mt-4 flex cursor-pointer items-center gap-3 text-sm font-bold">
+        <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} className="peer sr-only" />
+        <span className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${isActive ? "bg-brand" : "bg-ink/20"} after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-transform ${isActive ? "after:translate-x-5" : ""}`} />
+        Bookable immediately
+      </label>
+      {msg && <p className={`mt-4 rounded-xl px-4 py-3 text-sm font-bold ${msg.ok ? "bg-green-50 text-green-700" : "bg-red-50 text-red-600"}`}>{msg.text}</p>}
+      <button type="submit" disabled={pending || !name.trim()} className="mt-6 w-full rounded-xl bg-brand py-3.5 text-sm font-bold text-white hover:opacity-90 disabled:opacity-60">
+        {pending ? "Adding…" : "Add service"}
+      </button>
+    </form>
   );
 }
 
