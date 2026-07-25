@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Icon from "@/components/Icon";
+import DatePicker from "@/components/DatePicker";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { advanceOrder } from "../actions";
 
@@ -87,7 +88,7 @@ export default function FulfilmentControl({
             </div>
             <div>
               <label className="mb-1.5 block text-sm font-bold">Estimated delivery</label>
-              <input type="date" className={field} value={eta} onChange={(e) => setEta(e.target.value)} />
+              <DatePicker className={field} value={eta} onChange={setEta} disablePast placeholder="Select a date" />
             </div>
           </div>
           {error && <p className="mt-3 rounded-xl bg-red-50 px-4 py-2.5 text-xs font-bold text-red-600">{error}</p>}

@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Icon from "@/components/Icon";
+import DatePicker from "@/components/DatePicker";
 import { createCampaign } from "./actions";
 import { type CampaignProduct } from "./CampaignsView";
 
@@ -97,11 +98,11 @@ export default function CampaignForm({ products, onClose, onCreated }: Props) {
             )}
             <div>
               <label className={label}>Starts</label>
-              <input className={field} type="date" value={starts} onChange={(e) => setStarts(e.target.value)} />
+              <DatePicker className={field} value={starts} onChange={setStarts} placeholder="Select start date" />
             </div>
             <div>
               <label className={label}>Ends</label>
-              <input className={field} type="date" value={ends} onChange={(e) => setEnds(e.target.value)} />
+              <DatePicker className={field} value={ends} onChange={setEnds} min={starts || undefined} placeholder="Select end date" />
             </div>
           </div>
 
