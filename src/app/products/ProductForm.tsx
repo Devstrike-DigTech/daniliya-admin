@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Icon from "@/components/Icon";
+import CategoryCombobox from "@/components/CategoryCombobox";
 import FileUpload, { type UploadedFile } from "@/components/FileUpload";
 import {
   createProduct,
@@ -245,18 +246,11 @@ export default function ProductForm({
               {/* Category — pick an existing one or type a new one */}
               <div>
                 <label className={labelCls}>Category</label>
-                <input
-                  className={inputCls}
-                  list="product-categories"
+                <CategoryCombobox
                   value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  placeholder="Pick one, or type a new category"
+                  onChange={setCategory}
+                  categories={categories}
                 />
-                <datalist id="product-categories">
-                  {categories.map((c) => (
-                    <option key={c} value={c} />
-                  ))}
-                </datalist>
                 <p className="mt-1 text-xs text-ink/50">
                   Choose from your {categories.length} existing categor{categories.length === 1 ? "y" : "ies"}, or type a new one to create it.
                 </p>
