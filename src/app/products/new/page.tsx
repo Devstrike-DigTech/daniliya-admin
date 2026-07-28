@@ -5,6 +5,11 @@ import ProductForm, { type VendorOption } from "../ProductForm";
 export const metadata: Metadata = { title: "Add a product" };
 
 export default async function NewProductPage() {
-  const vendors = await apiFetchSafe<VendorOption[]>("/admin/products/vendor-options");
-  return <ProductForm mode="create" vendors={vendors ?? []} />;
+  const [vendors, categories] = await Promise.all([
+    apiFetchSafe<VendorOption[]>("/admin/products/vendor-options"),
+    apiFetchSafe<string[]>("/products/categories"),
+  ]);
+  return (
+    <ProductForm mode="create" vendors={vendors ?? []} categories={categories ?? []} />
+  );
 }

@@ -12,9 +12,10 @@ export default async function EditProductPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [product, vendors] = await Promise.all([
+  const [product, vendors, categories] = await Promise.all([
     apiFetchSafe<AdminProductDetail>(`/admin/products/${id}`),
     apiFetchSafe<VendorOption[]>("/admin/products/vendor-options"),
+    apiFetchSafe<string[]>("/products/categories"),
   ]);
   if (!product) notFound();
 
@@ -23,11 +24,11 @@ export default async function EditProductPage({
       mode="edit"
       productId={product.id}
       vendors={vendors ?? []}
+      categories={categories ?? []}
       initial={{
         title: product.title,
         description: product.description ?? "",
         price: product.price,
-        costPrice: product.costPrice ?? "",
         stockQuantity: product.stockQuantity,
         category: product.category ?? "",
         vendorId: product.vendorId,
@@ -35,6 +36,12 @@ export default async function EditProductPage({
         affiliateEligible: product.affiliateEligible,
         influencerEligible: product.influencerEligible,
         commissionMode: product.commissionMode,
+        variantType: product.variantType,
+        variants: (product.variants ?? []).map((v) => ({
+          name: v.name,
+          price: String(Number(v.price)),
+          stock: String(v.stockQuantity),
+        })),
         imageUrls: product.images.map((i) => i.url),
       }}
     />

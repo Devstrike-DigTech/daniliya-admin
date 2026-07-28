@@ -23,6 +23,8 @@ export type AdminProductDetail = {
   commissionMode: "INCLUSIVE" | "ADD_ON";
   isFeaturedBook: boolean;
   stockQuantity: number;
+  variantType: "CLOTHING_SIZE" | "DIMENSION" | "WEIGHT" | "OTHER" | null;
+  variants: { id: string; name: string; price: string; stockQuantity: number; sortOrder: number }[];
   category: string | null;
   status: string;
   rejectedReason: string | null;
@@ -42,6 +44,14 @@ export type AdminProductDetail = {
 
 const naira = (v: string | number) =>
   `₦${Number(v).toLocaleString("en-NG", { maximumFractionDigits: 0 })}`;
+
+/** Buyer-facing heading for each size type. */
+const SIZE_LABEL: Record<string, string> = {
+  CLOTHING_SIZE: "Size",
+  DIMENSION: "Dimensions",
+  WEIGHT: "Weight",
+  OTHER: "Option",
+};
 
 // Mirrors ProductsView — keep the status vocabulary consistent across pages.
 const statusPill: Record<string, string> = {
@@ -121,11 +131,41 @@ export default function ProductDetail({ product: p }: { product: AdminProductDet
 
       {/* Key stats */}
       <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatFoot label="Sale price" value={naira(p.price)} />
-        <StatFoot label={p.vendorId ? "Vendor / cost price" : "Cost price"} value={p.costPrice ? naira(p.costPrice) : "—"} />
+        <StatFoot label={p.variantType ? "From (lowest size)" : "Sale price"} value={naira(p.price)} />
+        <StatFoot label={p.vendorId ? "Vendor cost price" : "Cost basis"} value={p.costPrice ? naira(p.costPrice) : "—"} />
         <StatFoot label="Stock on hand" value={`${p.stockQuantity}`} />
         <StatFoot label="Profit per unit sold" value={perUnit === null ? "—" : naira(perUnit)} />
       </div>
+
+      {/* Sizes, when the product has them */}
+      {p.variantType && p.variants.length > 0 && (
+        <div className="mt-6 rounded-2xl border border-ink/10 bg-white p-6">
+          <p className="flex items-center gap-2 font-bold">
+            <Icon name="package" size={16} className="text-brand" />
+            {SIZE_LABEL[p.variantType]} options
+          </p>
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full min-w-[360px] text-left text-sm">
+              <thead>
+                <tr className="border-b border-ink/10 text-xs uppercase tracking-wide text-ink/45">
+                  <th className="py-2.5 pr-4 font-bold">{SIZE_LABEL[p.variantType]}</th>
+                  <th className="px-4 py-2.5 font-bold">Price</th>
+                  <th className="px-4 py-2.5 text-right font-bold">Stock</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-ink/8">
+                {p.variants.map((v) => (
+                  <tr key={v.id}>
+                    <td className="py-3 pr-4 font-bold">{v.name}</td>
+                    <td className="px-4 py-3">{naira(v.price)}</td>
+                    <td className="px-4 py-3 text-right text-ink/70">{v.stockQuantity}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Sales performance — real, from paid orders */}
       <p className="mt-8 text-lg font-bold text-ink/70">Sales performance</p>

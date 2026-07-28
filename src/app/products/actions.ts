@@ -53,20 +53,34 @@ export async function rejectProduct(id: string, reason?: string): Promise<Action
   }
 }
 
+/** A single size/option row (name + price + optional stock). */
+export type ProductVariantInput = {
+  name: string;
+  price: number;
+  stockQuantity?: number;
+};
+
+export type ProductVariantType = "CLOTHING_SIZE" | "DIMENSION" | "WEIGHT" | "OTHER";
+
 /** The product fields an admin form submits (create and edit share this shape). */
 export type ProductInput = {
   title: string;
   slug?: string;
   description?: string;
-  price: number;
-  costPrice?: number;
-  stockQuantity: number;
+  /** Required for single-price products; omit when the product has sizes. */
+  price?: number;
+  /** Omit when the product has sizes (stock lives on each size). */
+  stockQuantity?: number;
   category?: string;
   vendorId?: string | null;
   commissionRate?: number;
   affiliateEligible?: boolean;
   influencerEligible?: boolean;
   commissionMode?: "INCLUSIVE" | "ADD_ON";
+  /** Null/undefined = single-price; set = the product has sizes. */
+  variantType?: ProductVariantType | null;
+  /** The sizes. Send an empty array in edit mode to clear existing sizes. */
+  variants?: ProductVariantInput[];
   publish?: boolean;
   imageUrls?: string[];
 };
