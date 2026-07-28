@@ -22,6 +22,7 @@ type OrderItem = {
   id: string;
   productId: string;
   titleSnapshot: string;
+  variantName: string | null;
   quantity: number;
   unitPrice: string;
   totalPrice: string;
@@ -175,7 +176,12 @@ export default async function Page({
                     className="h-12 w-12 rounded-xl object-cover"
                   />
                   <div>
-                    <p className="font-bold">{it.titleSnapshot}</p>
+                    <p className="font-bold">
+                      {it.titleSnapshot}
+                      {it.variantName ? (
+                        <span className="ml-1.5 rounded-full bg-brand/10 px-2 py-0.5 text-xs font-bold text-brand">{it.variantName}</span>
+                      ) : null}
+                    </p>
                     <p className="text-xs text-ink/50">Qty {it.quantity} · {naira(it.unitPrice)} each</p>
                   </div>
                 </div>
