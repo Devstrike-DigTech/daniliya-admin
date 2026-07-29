@@ -36,7 +36,32 @@ export type AffiliateDetailData = {
     email: string;
     phone: string | null;
     status: string;
+    bankAccounts: {
+      id: string;
+      bankName: string | null;
+      accountNumber: string;
+      accountName: string | null;
+      isDefault: boolean;
+      verified: boolean;
+    }[];
+    kycSubmission: {
+      status: string;
+      idType: string | null;
+      idNumberLast4: string | null;
+      dob: string | null;
+      submittedAt: string | null;
+      verifiedAt: string | null;
+      reason: string | null;
+    } | null;
   };
+};
+
+const ID_TYPE_LABEL: Record<string, string> = {
+  NIN: "National ID (NIN)",
+  BVN: "BVN",
+  DRIVERS_LICENSE: "Driver's licence",
+  PASSPORT: "Passport",
+  VOTER_ID: "Voter's card",
 };
 
 const TABS = ["Overview", "Products", "Payouts & Assessment"] as const;
@@ -45,15 +70,6 @@ const EMPTY = "—";
 const title = (s: string) => s.charAt(0) + s.slice(1).toLowerCase();
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleDateString("en-NG", { year: "numeric", month: "short", day: "numeric" }) : EMPTY;
-
-/** bankDetailsJson is free-form on the API; render only what is actually present. */
-function bankLabel(json: Record<string, unknown> | null): string {
-  if (!json) return EMPTY;
-  const bank = typeof json.bankName === "string" ? json.bankName : null;
-  const acct = typeof json.accountNumber === "string" ? json.accountNumber : null;
-  if (bank && acct) return `${bank} ****${acct.slice(-4)}`;
-  return bank ?? acct ?? EMPTY;
-}
 
 export default function AffiliateDetail({ affiliate: a }: { affiliate: AffiliateDetailData }) {
   const [tab, setTab] = useState<(typeof TABS)[number]>("Overview");
@@ -285,6 +301,15 @@ const card = "rounded-2xl border border-ink/10 bg-white p-6";
 
 function OverviewTab({ a }: { a: AffiliateDetailData }) {
   const phone = a.user.phone;
+  const banks = a.user.bankAccounts ?? [];
+  const defaultBank = banks.find((b) => b.isDefault) ?? banks[0];
+  const bankValue = defaultBank
+    ? `${defaultBank.bankName ?? "Bank"} ****${defaultBank.accountNumber.slice(-4)}`
+    : EMPTY;
+  const kyc = a.user.kycSubmission;
+  const idValue = kyc?.idType
+    ? `${ID_TYPE_LABEL[kyc.idType] ?? kyc.idType}${kyc.idNumberLast4 ? ` ••••${kyc.idNumberLast4}` : ""}`
+    : EMPTY;
   return (
     <div className="mt-6 space-y-6">
       <div className={card}>
@@ -295,9 +320,8 @@ function OverviewTab({ a }: { a: AffiliateDetailData }) {
           {/* No city field on the payload. */}
           <CopyField icon="pin" label="City" value={EMPTY} />
           <CopyField icon="calendar" label="Joined" value={fmtDate(a.createdAt)} />
-          {/* NIN is stored encrypted — only its presence is reportable. */}
-          <CopyField icon="shield-check" label="NIN" value={a.ninEncrypted ? "On file" : EMPTY} />
-          <CopyField icon="bank" label="Bank" value={bankLabel(a.bankDetailsJson)} />
+          <CopyField icon="shield-check" label="ID (Smile ID)" value={idValue} />
+          <CopyField icon="bank" label="Bank" value={bankValue} />
         </div>
         <div className="mt-4 flex flex-wrap gap-3">
           {phone && (
@@ -373,12 +397,54 @@ function PayoutsTab({ a }: { a: AffiliateDetailData }) {
       </div>
 
       <div className={card}>
-        <p className="font-bold">Bank details</p>
-        <p className="mt-3 text-xl font-bold">{bankLabel(a.bankDetailsJson)}</p>
-        <p className="mt-1 text-sm text-ink/50">
-          KYC {title(a.kycStatus)}
-          {a.kycRejectedReason ? ` · ${a.kycRejectedReason}` : ""}
-        </p>
+        <p className="font-bold">Bank details &amp; KYC</p>
+        {(() => {
+          const banks = a.user.bankAccounts ?? [];
+          const kyc = a.user.kycSubmission;
+          const status = kyc?.status ?? a.kycStatus;
+          const reason = kyc?.reason ?? a.kycRejectedReason;
+          return (
+            <>
+              {banks.length > 0 ? (
+                <ul className="mt-4 space-y-2.5">
+                  {banks.map((b) => (
+                    <li key={b.id} className="rounded-xl border border-ink/10 px-4 py-3">
+                      <p className="flex flex-wrap items-center gap-2 text-sm font-bold">
+                        {b.bankName ?? "Bank account"}
+                        {b.isDefault && (
+                          <span className="rounded-full bg-brand/15 px-2 py-0.5 text-[10px] font-bold text-brand">Default</span>
+                        )}
+                        {b.verified && (
+                          <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-bold text-green-700">Verified</span>
+                        )}
+                      </p>
+                      <p className="mt-0.5 text-sm text-ink/60">
+                        ****{b.accountNumber.slice(-4)}
+                        {b.accountName ? ` · ${b.accountName}` : ""}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-4 text-sm text-ink/45">No payout account on file yet.</p>
+              )}
+              <div className="mt-4 border-t border-ink/8 pt-3 text-sm">
+                <p className="flex items-center justify-between">
+                  <span className="text-ink/55">Identity (KYC)</span>
+                  <span className="font-bold">{title(status)}</span>
+                </p>
+                {kyc?.idType && (
+                  <p className="mt-1 text-xs text-ink/50">
+                    {ID_TYPE_LABEL[kyc.idType] ?? kyc.idType}
+                    {kyc.idNumberLast4 ? ` ••••${kyc.idNumberLast4}` : ""}
+                    {kyc.submittedAt ? ` · submitted ${fmtDate(kyc.submittedAt)}` : ""}
+                  </p>
+                )}
+                {reason && <p className="mt-1 text-xs text-red-600">{reason}</p>}
+              </div>
+            </>
+          );
+        })()}
       </div>
     </div>
   );
