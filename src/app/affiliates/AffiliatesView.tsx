@@ -224,13 +224,24 @@ export default function AffiliatesView({ affiliates }: { affiliates: AffiliateRo
                     <td className="px-4 py-4 text-right tabular-nums text-ink/45">—</td>
                     <td className="px-4 py-4 text-right font-bold tabular-nums text-ink/45">—</td>
                     <td className="px-4 py-4">
-                      <span className={`inline-block rounded-full px-3 py-1 text-xs font-bold ${
-                        label === "Approved"
+                      <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ${
+                        a.kycStatus === "VERIFIED" || a.kycStatus === "APPROVED"
                           ? "bg-green-100 text-green-700"
-                          : label === "Rejected"
+                          : a.kycStatus === "REJECTED"
                             ? "bg-red-100 text-red-600"
-                            : "bg-amber-100 text-amber-700"
+                            : a.kycStatus === "PENDING_MANUAL" || a.kycStatus === "SUBMITTED"
+                              ? "bg-amber-100 text-amber-700"
+                              : "bg-ink/8 text-ink/50"
                       }`}>
+                        <span className={`h-1.5 w-1.5 rounded-full ${
+                          a.kycStatus === "VERIFIED" || a.kycStatus === "APPROVED"
+                            ? "bg-green-600"
+                            : a.kycStatus === "REJECTED"
+                              ? "bg-red-500"
+                              : a.kycStatus === "PENDING_MANUAL" || a.kycStatus === "SUBMITTED"
+                                ? "bg-amber-500"
+                                : "bg-ink/40"
+                        }`} />
                         {label}
                       </span>
                     </td>

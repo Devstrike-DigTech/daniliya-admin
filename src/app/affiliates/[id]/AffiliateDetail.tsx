@@ -54,7 +54,12 @@ export type AffiliateDetailData = {
       reason: string | null;
     } | null;
   };
+  metrics: { lifetimeEarnings: string; pending: string; conversions: number };
+  products: { title: string; units: number; revenue: string }[];
 };
+
+const naira = (v: string | number) =>
+  `₦${Number(v).toLocaleString("en-NG", { maximumFractionDigits: 0 })}`;
 
 const ID_TYPE_LABEL: Record<string, string> = {
   NIN: "National ID (NIN)",
@@ -161,10 +166,10 @@ export default function AffiliateDetail({ affiliate: a }: { affiliate: Affiliate
 
       {/* Stat cards — no earnings/clicks/conversion fields on the detail payload */}
       <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Lifetime earnings" value={EMPTY} />
-        <MetricCard label="Conversions" value={EMPTY} />
-        <MetricCard label="Clicks" value={EMPTY} />
-        <MetricCard label="Pending payout" value={EMPTY} gold />
+        <MetricCard label="Lifetime earnings" value={naira(a.metrics.lifetimeEarnings)} />
+        <MetricCard label="Conversions" value={`${a.metrics.conversions}`} />
+        <MetricCard label="Clicks" value="Not tracked" />
+        <MetricCard label="Pending payout" value={naira(a.metrics.pending)} gold />
       </div>
 
       {/* Tabs */}
@@ -183,7 +188,7 @@ export default function AffiliateDetail({ affiliate: a }: { affiliate: Affiliate
       </div>
 
       {tab === "Overview" && <OverviewTab a={a} />}
-      {tab === "Products" && <ProductsTab />}
+      {tab === "Products" && <ProductsTab a={a} />}
       {tab === "Payouts & Assessment" && <PayoutsTab a={a} />}
 
       {messaging && (
@@ -318,7 +323,6 @@ function OverviewTab({ a }: { a: AffiliateDetailData }) {
           <CopyField icon="mail" label="Email" value={a.user.email} />
           <CopyField icon="phone" label="Phone" value={phone ?? EMPTY} />
           {/* No city field on the payload. */}
-          <CopyField icon="pin" label="City" value={EMPTY} />
           <CopyField icon="calendar" label="Joined" value={fmtDate(a.createdAt)} />
           <CopyField icon="shield-check" label="ID (Smile ID)" value={idValue} />
           <CopyField icon="bank" label="Bank" value={bankValue} />
@@ -340,9 +344,9 @@ function OverviewTab({ a }: { a: AffiliateDetailData }) {
           <p className="font-bold">Performance snapshot</p>
           <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
             {/* Click / conversion / refund analytics are not on this endpoint. */}
-            <Snap label="7-day clicks" value={EMPTY} />
-            <Snap label="7-day conv." value={EMPTY} />
-            <Snap label="Refund rate" value={EMPTY} />
+            <Snap label="Conversions" value={`${a.metrics.conversions}`} />
+            <Snap label="Lifetime" value={naira(a.metrics.lifetimeEarnings)} />
+            <Snap label="Pending" value={naira(a.metrics.pending)} />
             <Snap label="Assessment" value={a.assessmentPassed ? "Passed" : "Not passed"} />
           </div>
         </div>
@@ -355,12 +359,35 @@ function OverviewTab({ a }: { a: AffiliateDetailData }) {
   );
 }
 
-function ProductsTab() {
+function ProductsTab({ a }: { a: AffiliateDetailData }) {
   return (
     <div className={`mt-6 ${card}`}>
-      <p className="font-bold">Products this affiliate promotes</p>
-      {/* No per-affiliate product/attribution data on GET /admin/affiliates/{id}. */}
-      <p className="mt-4 text-sm text-ink/45">No product data yet.</p>
+      <p className="font-bold">Products sold through this affiliate</p>
+      <p className="mt-0.5 text-sm text-ink/50">From paid orders that carried their referral code.</p>
+      {a.products.length === 0 ? (
+        <p className="mt-4 text-sm text-ink/45">No attributed sales yet.</p>
+      ) : (
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full min-w-[420px] text-left text-sm">
+            <thead>
+              <tr className="border-b border-ink/10 text-xs uppercase tracking-wide text-ink/45">
+                <th className="py-2.5 pr-4 font-bold">Product</th>
+                <th className="px-4 py-2.5 text-right font-bold">Units</th>
+                <th className="px-4 py-2.5 text-right font-bold">Revenue</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-ink/8">
+              {a.products.map((p) => (
+                <tr key={p.title}>
+                  <td className="py-3 pr-4 font-bold">{p.title}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{p.units}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{naira(p.revenue)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
@@ -370,12 +397,14 @@ function PayoutsTab({ a }: { a: AffiliateDetailData }) {
     <div className="mt-6 grid gap-6 lg:grid-cols-2">
       <div className={card}>
         <p className="font-bold">Summary</p>
-        {/* No payout aggregates on this endpoint. */}
         <div className="mt-4 space-y-3 text-sm">
-          <SumRow label="Payouts to date" value={EMPTY} />
-          <SumRow label="Total paid" value={EMPTY} />
-          <SumRow label="Pending release" value={EMPTY} />
-          <SumRow label="Last payout" value={EMPTY} />
+          <SumRow label="Lifetime earned" value={naira(a.metrics.lifetimeEarnings)} />
+          <SumRow
+            label="Paid out"
+            value={naira(Math.max(0, Number(a.metrics.lifetimeEarnings) - Number(a.metrics.pending)))}
+          />
+          <SumRow label="Pending release" value={naira(a.metrics.pending)} />
+          <SumRow label="Conversions" value={`${a.metrics.conversions}`} />
         </div>
       </div>
 

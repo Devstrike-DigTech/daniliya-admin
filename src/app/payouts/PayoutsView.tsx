@@ -33,7 +33,14 @@ const naira = (v: string | number) =>
 const runDate = (v: string | null) =>
   v ? new Date(v).toLocaleDateString("en-NG", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 
-export default function PayoutsView({ payouts }: { payouts: PayoutRow[] }) {
+export type PendingSummary = {
+  total: string;
+  readyTotal: string;
+  count: number;
+  byAudience: Record<string, { amount: string; count: number }>;
+};
+
+export default function PayoutsView({ payouts, pending }: { payouts: PayoutRow[]; pending: PendingSummary | null }) {
   const router = useRouter();
   const [audience, setAudience] = useState<(typeof AUDIENCES)[number]>("All");
   const [pill, setPill] = useState<(typeof PILLS)[number]>("All");
@@ -104,7 +111,17 @@ export default function PayoutsView({ payouts }: { payouts: PayoutRow[] }) {
         ))}
       </div>
 
-      <div className="mt-6 grid gap-4 lg:grid-cols-3">
+      <div className="mt-6 grid gap-4 lg:grid-cols-4">
+        <SummaryCard
+          label="Owed (not yet batched)"
+          value={naira(pending?.total ?? 0)}
+          sub={
+            pending && pending.count > 0
+              ? `${pending.count} commission${pending.count === 1 ? "" : "s"} · ${naira(pending.readyTotal)} ready for the next run`
+              : "No commissions awaiting payout"
+          }
+          accent="bg-[#6d3fa0]"
+        />
         <SummaryCard
           label="Queued for payout"
           value={naira(sum(queuedBatches))}
