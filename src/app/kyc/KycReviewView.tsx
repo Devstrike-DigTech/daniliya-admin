@@ -10,6 +10,8 @@ export type KycSubmission = {
   id: string;
   status: string;
   idType: string | null;
+  /** Full number, decrypted for review; falls back to last-4 if unavailable. */
+  idNumber: string | null;
   idNumberLast4: string | null;
   dob: string | null;
   govIdUrl: string | null;
@@ -104,7 +106,7 @@ export default function KycReviewView({ queue }: { queue: KycSubmission[] }) {
 
             <div className="mt-4 grid gap-4 border-t border-ink/8 pt-4 sm:grid-cols-2 lg:grid-cols-4">
               <Detail label="ID type" value={k.idType ? (ID_TYPE_LABEL[k.idType] ?? k.idType) : "—"} />
-              <Detail label="ID number" value={k.idNumberLast4 ? `••••${k.idNumberLast4}` : "—"} />
+              <Detail label="ID number" value={k.idNumber ?? (k.idNumberLast4 ? `••••${k.idNumberLast4}` : "—")} mono />
               <Detail label="Date of birth" value={k.dob ?? "—"} />
               <Detail label="Submitted" value={fmtDate(k.submittedAt)} />
               <Detail
@@ -200,11 +202,11 @@ function SummaryCard({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Detail({ label, value }: { label: string; value: string }) {
+function Detail({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
     <div>
       <p className="text-xs text-ink/45">{label}</p>
-      <p className="mt-1 text-sm font-bold">{value}</p>
+      <p className={`mt-1 text-sm font-bold ${mono ? "font-mono" : ""}`}>{value}</p>
     </div>
   );
 }
