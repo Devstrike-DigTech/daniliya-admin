@@ -22,6 +22,7 @@ export const navGroups = [
       { href: "/affiliates", label: "Affiliates", icon: "trending-up" },
       { href: "/influencers", label: "Influencers", icon: "megaphone" },
       { href: "/vendors", label: "Vendors", icon: "store" },
+      { href: "/kyc", label: "KYC review", icon: "shield-check" },
     ],
   },
   {
