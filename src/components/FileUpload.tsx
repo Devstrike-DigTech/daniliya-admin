@@ -22,7 +22,7 @@ export default function FileUpload({
   onChange,
   hint,
 }: {
-  purpose: "kyc" | "product" | "booking" | "campaign";
+  purpose: "kyc" | "product" | "booking" | "campaign" | "resource";
   accept?: string;
   multiple?: boolean;
   value: UploadedFile[];

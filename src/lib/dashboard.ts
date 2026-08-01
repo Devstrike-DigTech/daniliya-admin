@@ -45,6 +45,7 @@ export const navGroups = [
     items: [
       { href: "/campaigns", label: "Campaigns", icon: "rocket" },
       { href: "/onboarding", label: "Onboarding", icon: "book" },
+      { href: "/resources", label: "Resources", icon: "download" },
       { href: "/reviews", label: "Reviews", icon: "star" },
       { href: "/support", label: "Support", icon: "support" },
     ],
